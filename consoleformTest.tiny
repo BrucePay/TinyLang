@@ -1,0 +1,183 @@
+###############################################################
+#
+# Example showing how to create a console form in tiny.
+#
+###############################################################
+
+import utils
+import console
+import consoleform
+
+formData = {
+    form0: null
+    AddressForm: null
+    OtherForm: null
+}
+
+###############################################################
+#
+# The top-level menu
+#
+menuPos = console.GetWindowWidth()/2 - 20
+menu = ConsoleForm
+        .New()
+        .AddBox(menupos-2, 7, 38, 13, 'green')
+        .AddLabel(menuPos, 9, "Choose your action:")
+        .AddButton(menuPos, 10, 35, "Get Defined Variables", {
+            cls()
+            console.Announce("Currently defined Variables: " + (Vars() |> join ' '), 'yellow', 60)
+        })
+        .AddButton(menuPos, 11, 35, "List Files", {
+            text = ls '*.tiny' |> map { it.name } |> join ' '
+            formData.form0 = text
+            console.Announce(text)
+        })
+        .AddButton(menuPos, 12, 35, "Show Functions", {
+            cls()
+            functions() |> outhost
+            alert("\n\nHit enter to return to the main menu.")
+            console.ReadLine()
+        })
+        .AddButton(menuPos, 13, 35,  "Show Address Form", {
+            FormData.AddressForm = AddressForm.ShowForm()
+        })
+        .AddButton(menuPos, 14, 35, "Show the Other Form", {
+            FormData.OtherForm = OtherForm.ShowForm()
+        })
+        .AddButton(menuPos, 15, 35, "Calculator", {
+            mathForm.ShowForm()
+        })
+        .AddButton(menuPos, 16, 35, "Submit Changes", 'submit')
+        .AddButton(menuPos, 17, 35, 'Cancel', 'cancel')
+        .AddButton(menuPos, 18, 35, 'Help', {
+            console.Announce('
+                This is a demo application for testing the 
+                console forms module. Use the cursor keys to move up 
+                and down through the menu then hit enter or the spacebar 
+                to invoke the item.
+                ', 'yellow')
+        })
+
+###################################################################
+#
+# Form for getting an address, including initial data and help strings
+#
+AddressForm = ConsoleForm
+        .New("Please enter your Name, Address and any additional info.")
+
+        .AddLabel(10, 4, "First Name")
+        .AddField(10, 5, 30, 'FirstName', "Homer", "Please enter your full first name.")
+        
+        .AddLabel(70, 4, "Last Name")
+        .AddField(70, 5, 30, 'LastName', "Simpson", "Please enter you full last name.")
+        
+        .AddLabel(10, 7, "Address")
+        .AddField(10, 8, 50, 'Address',  "1234 Sunny Lane", "Enter your street address")
+
+        .AddLabel(70, 7, "City")
+        .AddField(70, 8, 30, 'City', 'Springfield', 'Enter the name of the town you live in')
+        
+        .AddLabel(10, 10, "State")
+        .AddField(10, 11, 30, 'State', "MA", 'Enter the state you are currently living in.')
+        
+        .AddLabel(70, 10, 'Zip Code')
+        .AddField(70, 11, 10, 'Zip',  "12345", 'Enter you Zip Code or Postal Code,')
+        
+        .AddLabel(10, 13, "Country")
+        .AddField(10, 14, 30, "Country", 'USA', 'Enter your country of residence')
+        
+        .AddButton(20, 25, 10, 'Submit', 'Submit')
+        .AddButton(40, 25, 10, 'Cancel', 'Cancel')
+        .AddButton(60, 25, 10, 'Help', {
+            console.Announce ('
+                This is an announcement. 
+                This is only an announcement. 
+                If it had been real help text then it 
+                probably would have made sense. So there.
+                ', 'yellow')
+        })
+
+###################################################################
+#
+# Another random form
+#
+dialogWidth = 44
+left = [<int>] (console.GetWindowWidth() / 2 - dialogWidth / 2)
+OtherForm = ConsoleForm
+        .New("This is another form so there!")
+        .AddBox(left, 3, dialogWidth, 16)
+
+        .AddLabel(left+2, 5, 'This is a label')
+        .AddField(left+2, 6, 40, 'Label1', 'aaa', 'This is the help message for label 1')
+
+        .AddLabel(left+2, 8, 'This is another label')
+        .AddField(left+2, 9, 40, 'Label2', 'bbb', 'This is the help message for label 2')
+
+        .AddLabel(left+2, 11, 'This is a third label')
+        .AddField(left+2, 12, 40, 'Label3', 'ccc', 'This is the help message for label 3')
+
+        .AddLabel(left+2, 14, 'This is a fourth label')
+        .AddField(left+2, 15, 40, 'Label4', 'ddd', 'This is the help message for label 4')
+
+        .AddButton(left+4, 17, 8, 'Submit', 'Submit')
+        .AddButton(left+17, 17, 8, 'Cancel', 'Cancel')
+        .AddButton(left+30, 17, 6, 'Help', {
+            console.Announce('
+                Blah bla blah blah blah. So help me blah.
+                Blah bla blah blah blah. So help me blah.
+                Blah bla blah blah blah. So help me blah.
+                Blah bla blah blah blah. So help me blah.
+                Blah bla blah blah blah. So help me blah.
+                Blah bla blah blah blah. So help me blah.
+                Blah bla blah blah blah. So help me blah.
+            ')
+        });
+
+###################################################################
+#
+# A 'calculator' demo form
+#
+mathForm = consoleForm.New()
+        .AddBox(18, 5, 32, 10)
+        .AddLabel(20, 7, "Enter the first number")
+        .AddField(20, 8, 20, 'f1')
+        .AddLabel(20, 9, "Enter the second number")
+        .AddField(20, 10, 20, 'f2')
+        .AddButton(22, 11, 3, '+', { form ->
+            newVal = (form.GetField('f1') as [<double>]) + (form.GetField('f2') as [<double>])
+            form.SetField('f1', "$newVal")
+            form.SetField('f2', '0')
+        })
+        .AddButton(26, 11, 3, '-',  { form ->
+            newVal = (form.GetField('f1') as [<double>]) - (form.GetField('f2') as [<double>])
+            form.SetField('f1', "$newVal")
+            form.SetField('f2', '0')
+        })
+        .AddButton(30, 11, 3, '*',  { form ->
+            newVal = (form.GetField('f1') as [<double>]) * (form.GetField('f2') as [<double>])
+            form.SetField('f1', "$newVal")
+            form.SetField('f2', '0')
+        })
+        .AddButton(34, 11, 3, '/',  { form ->
+            newVal = (form.GetField('f1') as [<double>]) / (form.GetField('f2') as [<double>])
+            form.SetField('f1', "$newVal")
+            form.SetField('f2', '0')
+        })
+        .AddButton(23, 13, 8, 'Exit', 'cancel')
+
+###################################################################
+#
+# Now invoke the top level form
+#
+menu.ShowForm()
+
+#
+# Print out the resulting data
+#
+cls()
+foreach (k in keys(formData)) {
+    if (formData[k]) {
+        Alert("Element: $k")
+        println(formData[k])
+    }
+}

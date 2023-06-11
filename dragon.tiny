@@ -1,0 +1,16 @@
+###################################################################
+#
+# Function set that generates the sequence of turns needed to
+# draw a dragon curve.
+#     See: http://en.wikipedia.org/wiki/Dragon_curve
+#
+###################################################################
+
+# If number of iterations is passed in, use that otherwise default to 6
+iters = args.head() ?? 6
+
+def dragon 0         _    -> ''
+def dragon [<int>] n turn -> dragon(n-1, "r") + turn + dragon(n-1, 'l')
+
+# Try it out...
+dragon(iters, "") |> println

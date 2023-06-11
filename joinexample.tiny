@@ -1,0 +1,20 @@
+########################################################################
+#
+# Adapted from an F# example of how to use the LINQ Join() operator.
+#
+########################################################################
+
+warmCountries = ["Turkey", "Italy", "Spain", "Saudi Arabia", "Etiopia" ]
+europeanCountries = ["Denmark", "Germany", "Italy", "Portugal", "Spain" ]
+
+result = warmCountries.JoinLists(
+            europeanCountries,
+            {warm -> warm},
+            {european -> european},
+            {warm,_ -> warm})
+
+println("Joined countries which are both warm and European:")
+foreach (country in result) {
+    println(country)
+}
+

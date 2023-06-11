@@ -1,0 +1,63 @@
+###########################################################
+#
+# Test patterns outside of the 'match' statement; in asignments
+# and with the '~' operator. (NoteP also uses the 'then' operator.
+#
+###########################################################
+
+# Assignment pattern that assigns a variable inside a lambda match
+(a::{it >= 5 && it <= 10}::c::_ = [5,7,7]) then
+    format("First success a={0} b={1} c={2}", a, _1, c)
+    |> println;
+
+# Pattern matching using the ~ operator
+[50, 6, 70] ~ a::{it >= 5 && it <= 10}::c::_
+    then format("Second success a={0} b={1} c={2}", a, _1, c)
+    |> println;
+
+# 'prototype' object for a tree that defines one method for that tree
+prototype = {
+        print : { depth = 0 ->
+
+            # print the left side
+            match this.left
+            | [<IDictionary>] -> this.left.Print(depth+4)
+            | -> println(" " * (depth+2) + this.left)
+
+            # print the right side
+            match this.right
+            | [<IDictionary>] -> this.right.Print(depth+4)
+            | -> println(" " * (depth+2) + this.right)
+
+            # Print the operation
+            println(" " * depth + this.op)
+        }
+    }
+
+# Function to turn a triple into a tree node
+fn toNode list ->
+    list ~ op::v1::v2::_ 
+    then {
+        op:op
+        left:v1
+        right:v2
+    }
+    + prototype
+
+# build a tree
+tree =
+    toNode(['+',
+        toNode(['-',
+            6,
+            tonode(['/',
+                7,
+                8
+            ])
+        ]),
+        13
+    ])
+
+# And print it
+tree.print()
+
+

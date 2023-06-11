@@ -1,0 +1,36 @@
+################################################################
+#
+# An example showing a Tiny object being used as a generator
+# for the Fibonacci sequence
+#
+################################################################
+
+fn FibClass -> {
+    _current: 0
+    _next:    1
+
+    Next: {
+        c = this._current + this._next
+        this._current = this._next
+        this._next = c
+        this._current
+    }
+
+    Show: {
+        "Current is ${this._current} Next is ${this._next}" |>  println 
+    }
+}
+
+fibGen = FibClass()
+
+fibGen.Next() |> println
+fibGen.Next() |> println
+fibGen.Next() |> println
+fibGen.Next() |> println
+fibGen.Next() |> println
+fibGen.Next() |> println
+
+fibGen.Show();
+
+[1 .. 10] |> foreach { fibGen .Next() |> println }
+

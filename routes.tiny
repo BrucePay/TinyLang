@@ -1,0 +1,72 @@
+##################################################################
+#
+# Tiny script to find routes between european countries.
+#
+##################################################################
+
+#
+# The countries 'database'
+#
+countries = {}
+
+#
+# Function to declare that country a boarders on country b
+#
+fn borders a b { 
+    countries[a] = b :+ countries[a] |> distinct
+    countries[b] = a :+ countries[b] |> distinct
+} 
+
+#
+# Populate the database
+#
+borders( 'Belgium',     'France')
+borders( 'France',      'Spain')
+borders( 'Germany',     'Austria')
+borders( 'Germany',     'Denmark')
+borders( 'Denmark',     'Sweden')
+borders( 'Germany',     'Switzerland')
+borders( 'Netherlands', 'Belgium')
+borders( 'Netherlands', 'Germany')
+borders( 'Spain',       'Portugal')
+borders( 'Sweden',      'Norway')
+borders( 'Sweden',      'Finland')
+borders( 'Norway',      'Finland')
+borders( 'Italy',       'Switzerland')
+borders( 'Italy',       'Austria')
+
+#
+# Find a route between countries a and b
+#
+fn route a b checked=[] ->
+                    if (countries[a] :> b) {
+                        [a, b]
+                     }
+                     else {
+                        checked = a ++ checked
+                        shortest = []
+                        foreach (c in countries[a].where{checked !:> it}) {
+                            result = route(c, b, checked)
+                            if (result) {
+                               result = a ++ result
+                                if (shortest.Count == 0 || shortest.Count > result.Count)
+                                {
+                                    shortest = result
+                                }
+                            }
+                        }
+                        shortest
+                     }
+
+route('Austria', 'Spain').join(' -> ') |> println
+
+route('Denmark', 'Portugal').join(' -> ') |> println
+
+route('Portugal', 'Switzerland').join(' -> ') |> println
+
+route('Portugal', 'Norway').join(' -> ') |> println
+
+route('Belgium', 'Italy').join(' -> ') |> println
+
+
+

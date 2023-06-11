@@ -1,0 +1,54 @@
+###############################################################
+#
+# Test nested patterns and destructuring of lists with
+# patterns.
+#
+###############################################################
+
+# 3 levels deep
+
+[1,[20,[300]]] ~ a::[b::[c::_]::_]::_ then
+    println("Match with three levels a={0} b={1} c={2}", a, b, c)
+
+data = [
+    [1, [2, 3], 4],
+    [2, [3, 3], 4],
+    [3, [4, 3], 4],
+    [4, [5, 3], 5],
+    [5, [6, 3], 5],
+    [6, [7, 3], 5]
+]
+
+_ = matchlist data
+| a :: [ x :: y:: _] :: 4 :: _ ->
+    println("1) match a={0} x={1} y={2}", a, x, y)
+| a :: [ x :: y:: _] :: 5 :: _ ->
+    println("2) match a={0} x={1} y={2}", a, x, y)
+| ->
+    error 'Default pattern'
+
+###############################################################
+#
+# Function set to turn a flat list of items into a list of pairs
+# using pattern matching and function sets.
+#
+###############################################################
+
+def pairs []        -> [];
+def pairs x::[]     -> [[x, 0]];
+def pairs x::y::xs  -> [x, y] :+ pairs(xs);
+
+#
+# Now test the functions. They should all print true.
+#
+alert 'Testing destructuring with patterns; should be all true.';
+(pairs([]) == []) |> println;
+(pairs([1]) == [[1, 0]]) |> println;
+(pairs([1,2]) == [[1, 2]]) |> println;
+(pairs([1,2,3]) == [[1, 2], [3, 0]]) |> println;
+(pairs([1,2,3,4]) == [[1, 2], [3, 4]]) |> println;
+(pairs([1,2,3,4,5]) == [[1, 2], [3, 4], [5, 0]]) |> println;
+(pairs([1,2,3,4,5,6]) == [[1, 2], [3, 4], [5, 6]]) |> println;
+(pairs([1,2,3,4,5,6,7]) == [[1, 2], [3, 4], [5, 6], [7, 0]]) |> println;
+
+println('All done!')

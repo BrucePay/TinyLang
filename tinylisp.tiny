@@ -1,0 +1,1318 @@
+##############################################################
+#
+# A Tiny LISP implementation; not particularly consistent
+# with any dialect and is glacially slow.
+#
+##############################################################
+
+import utils
+
+############################################################
+#
+# Routine to parse text into s-expressions
+#
+fn parseSexpr text {
+
+    # Parser state variables
+    liststack   = []
+    list        = []
+    token       = []
+    string      = []
+    typeLiteral = []
+    inString    = 0
+    inComment   = false
+    inTypeLiteral = false
+    quoteStack  = []
+    quoted      = false
+    lineno      = 1
+
+    # Iterate through the characters in the input text
+    matchlist (text.ToCharArray())
+    | {inComment} -> 
+        if (it ~ r/[\r\n]/) {
+            inComment = false
+            lineno += 1
+        }
+
+    | {inString} ->
+        if (it == '"') {
+            list.Add(string.join())
+            inString = 0
+            string = []
+        }
+        else {
+            string.Add(it)
+        }
+
+    | {inTypeLiteral} ->
+        if (it == ']') {
+            typeStr = typeLiteral.Join()
+            typeVal = typeStr as [<type>];
+            if (typeVal == null) {
+                throw "Invalid type literal [$typeStr] on line $inTypeLiteral."
+            }
+
+            list.Add(typeVal)
+            typeLiteral = []
+            inTypeLiteral = 0
+        }
+        else {
+            typeLiteral.Add(it)
+        }
+
+    | "'" -> quoted = true
+
+    | '(' -> {
+                liststack.Push(list)
+                quoteStack.Push(quoted)
+                quoted = false
+                list = []
+            }
+
+    | ')' -> {
+                if (listStack.Count == 0) {
+                    throw "Unmatched ')' in expression at line $lineno."
+                }
+
+                if (token) {
+                    token = ProcessToken(token)
+                    if (quoted) {
+                        list.Add(['quote', token])
+                        quoted = false
+                    }
+                    else {
+                        list.Add(token)
+                    }
+
+                    token = []
+                }
+
+                oldList = liststack.Pop()
+                quoted = quoteStack.Pop()
+                if (quoted) {
+                    oldList.Add(['quote', list])
+                    quoted = false
+                }
+                else {
+                    oldList.Add(list)
+                }
+
+                list = oldList
+            }
+
+    | '[' -> inTypeLiteral = lineno
+
+    | '"' -> inString = lineno # record the line number of the start of the string.
+
+    | ';' -> inComment = true
+
+    | r/[ \r\n\t]/ -> {
+        if (it  ~ r/\n/) {
+            lineno += 1
+        }
+
+        if (token) {
+            token = ProcessToken(token)
+            if (quoted) {
+                if (token is [<Atom>]) {
+                   token = token.Value
+                }
+                list.Add(['quote', token])
+                quoted = false
+            }
+            else {
+                list.Add(token)
+            }
+            token = []
+        }
+    }
+
+    | -> token.Add(it)
+
+    if (inString) {
+        throw "Unterminated string constant starting on line $InString"
+    }
+
+    # Handle dangling tokens...
+    if (token) {
+        token = ProcessToken(token)
+
+        if (quoted) {
+            list.Add(['quote', token])
+            quoted = false
+        }
+        else {
+            list.Add(token)
+        }
+        token = []
+    }
+
+    if (listStack.Count > 0) {
+        throw "Missing close parens ')': ${listStack.Count} more parens are required to close the list; at line $lineno"
+    } 
+
+    list
+}
+
+############################################################
+#
+# Handle processing for individual tokens/atoms
+#
+fn ProcessToken token {
+    token = token.Join()
+    # Numbers
+    if (token ~ r/-?[0-9]+(\.[0-9]+)?(e-?[0-9]+)?|[0-9]+i|0x[0-9a-f]+/) {
+        val = AsNumber(token)
+        if (val == null) {
+            throw "Invalid numeric token '$token' at line $lineno."
+        }
+        return val
+    }
+    elseif ( token == 'lambda' ) {
+        return 'lambda'
+    }
+    else {
+        return [<atom>].new(token, lineno)
+    }
+    else {
+        return token
+    }
+}
+
+############################################################
+#
+# Function to evaluate s-expressions
+#
+fn sexpreval expr {
+
+    if (state.Depth > 200) { throw "Stack overflow" }
+
+   # Deal with simple values (scalar or quote/lambda expressions) first
+    match expr
+    | 'lambda'::_
+    | null
+    | []                    -> return expr;
+    | 'quote'::body::_      -> return body;
+    | 'true'                -> return true;
+    | 't'                   -> return true;
+    | 'false'               -> return false;
+    | 'nil'                 -> return null;
+    | 'lambda'              -> return 'lambda';
+    | [<Atom>]              -> return getVariable(expr);
+
+    # All other non-list data types evaluate to themselves
+    if (not(islist(expr))) {
+        return expr
+    }
+
+    # We're going to call a function so track the recursion depth
+    state.Depth += 1
+    try {
+
+        func::argslist = expr
+
+        if (func == null || func == '') {
+            throw "eval: function to call cannot be null or the empty string"
+        }
+
+        if (IsList(func) && func[0] != 'lambda') {
+            return sexpreval(func)
+        }
+
+       isSpecialForm = false
+       if (IsList(func) || func is [<TinyLambda>] || func is [<List[TinyLambda]>]) {
+           funcToCall = func
+       }
+       else {
+            lineno = 1
+            if (func is [<Atom>]) {
+                lineno = func.Lineno
+                func = func.Value
+            }
+
+            # Handle special forms first - arguments aren't evaluated
+            funcToCall = specialForms[func]
+            if (funcToCall != null) {
+                isSpecialForm = true
+            }
+            else {
+                # Check regular fexprs
+                funcToCall = symbolTable[func]
+            }
+
+            # Check PowerShell commands
+            if (funcToCall == null) {
+                funcToCall = GetCommand(func)
+            }
+
+            if (funcToCall == null) {
+                throw "Can't call function '$func' because it's not defined; at line $lineno"
+            }
+        }
+
+        # For all command types other tyat special forms, Evaluate all the args
+        # first, extracting the named arguments (i.e. -aNamedParam) as we go
+        evaluatedArgs = null
+        namedParameters = null
+        if (IsSpecialForm) {
+            # args are unevaluated in special forms
+            evaluatedArgs = argsList
+        }
+        else {
+            # evaluate all of the arguments to the function
+            argname = null
+            if (argsList.Count > 0) {
+                evaluatedArgs = []
+                namedParameters = {}
+                foreach (arg in argslist) {
+                    if (arg is [<Atom>] && arg.Value ~ r/^-\w+$/) {
+                        # Handle switch parameters
+                        if (argName) {
+                            namedParameters[argname] = true
+                        }
+                        
+                        argname = arg.Value.Substring(1)
+                       
+                    }
+                    elseif (argName != null) {
+                        namedParameters[argname] = sexpreval(arg)
+                        argname = null
+                    }
+                    elseif (arg == null) {
+                        evaluatedArgs.Add(null)
+                    }
+                    else {
+                        evaluatedArgs.Add(sexpreval(arg))
+                    }
+                }
+
+                # If there's a dangling parameter, set it to true
+                if (argName) {
+                    namedParameters[argname] = true
+                }
+
+                if (evaluatedArgs.Count == 0) {
+                    evaluatedArgs = null
+                }
+
+                if (namedParameters.Count == 0) {
+                    namedParameters = null
+                }
+            }
+        }
+
+        # Dispatch the function call based on type
+        match funcToCall
+        | [<TinyList>] -> {
+            # A user-defined function has the form 'lambda (args..) body)'
+            if (not ('lambda'::arguments::body = funcToCall)) {
+                throw "eval: only functions and lambda expressions can be invoked."
+            }
+
+            # Bind the arguments saving the old values in a dictionary
+            oldValues = [<Dictionary[string,object]>].new([<StringComparer>].OrdinalIgnoreCase)
+            if (arguments) {
+                arguments |> zip (evaluatedArgs) {
+                    if (it is [<Atom>]) {
+                        arg = it.value
+                    }
+                    else {
+                        arg = it
+                    }
+
+                    # don't care about nonexistent variables here
+                    oldValues[arg] = symbolTable[arg]
+                    symbolTable[arg] = it2
+                }
+            }
+
+            # Add in the magic 'args' and 'names-parameters'  variables
+            oldValues['args'] = symbolTable['args']
+            symbolTable['args'] = evaluatedArgs.Slice(arguments.Count, -1)
+
+            oldValues['names-parameters'] = symbolTable['names-parameters']
+            symbolTable['names-parameters'] = namedParameters
+
+            try {
+                result = null
+                foreach (item in body) {
+                    result = sexpreval(item)
+                }
+            }
+            finally {
+                # Restore the old variable values
+                oldValues |> foreach {
+                    symbolTable[it.key] = it.value
+                }
+            }
+            return result
+        }
+        | [<TinyLambda>] | [<List[TinyLambda]>] ->
+            # Invoke the Tiny function passing the arguments as a single list
+            return funcToCall(evaluatedArgs)
+
+        | [<CommandInfo>] -> {
+            # Native PowerShell commands
+            evaluatedArgs = evaluatedArgs |> map {
+                if (it is [<atom>]) {
+                    it.Value
+                }
+                else {
+                    it
+                }
+            }
+            |> where { it != null }
+
+            return shargs(funcToCall, evaluatedArgs, namedParameters, state._pipelineInput)
+        }
+
+    }
+    finally {
+        state.Depth -= 1
+    }
+}
+
+#
+# Maintains the state of the evaluator
+#
+State = {
+    depth: 0
+    _pipelineInput: null
+}
+
+##############################################################
+#
+# The built-in variables and functions (fexprs)
+#
+##############################################################
+
+
+##############################################################
+#
+# Function to get a variable from the variable table.
+#
+fn GetVariable name {
+
+    if (name == null) {
+        throw "GetVariable: you cannot pass null as a variable name"
+    }
+
+    if (name == "") {
+        throw "GetVariable: you cannot pass the empty string as a variable name"
+    }
+
+    lineno = 1
+    if (name is [<Atom>]) {
+        lineno = name.Lineno
+        name = name.Value
+    }
+
+    if (symbolTable :> name) {
+        symbolTable[name]
+    }
+    else {
+        throw "unbound atom '$name' at line $lineno"
+    }
+}
+
+##############################################################
+#
+# Maps symbols to their bound value, This table is initialized
+# with the built-in functions.
+#
+symbolTable = {
+
+    #H (void <args...>) : Takes arguments but returns nothing
+    'void':     {arglist -> }
+
+    #H (+ <args...>) : Adds all if its arguments together e.b. (+ 1 2 3) or (+ 'a 'bc 'd)
+    '+':        {argList -> argList.Sum()}
+
+    #H (* <args...>) : Multiply all of the arguments together e.g. (* 1 2 3) or (* '= 5)
+    '*':        {arglist -> argList.Product()}
+
+    #H (- <args...>) : Subtract all the aguments e.g. (- 5 3 2) == 0
+    '-':        {arglist -> arglist.reduce{it - it2}}
+
+    #H (/ <args...>) : Divide all of the arguments e.g. (/ 15 3 2) is equivalent to 15 / 3 / 2
+    '/':        {arglist -> arglist.reduce{it / it2}}
+
+    #H (% <args...>) : Compute the modulus of the arguments e.g. (% 5 4 3) == 5 % 4 % 3
+    '%':        {arglist -> arglist.reduce{it % it2}}
+
+    #H (< x y) : Comparison; true if y is greater than x
+    '<':        {x::y::rest ->
+                    if (rest) { throw "'<' only takes 2 arguments; at line $lineno" }
+                    x < y
+                }
+
+    #H (<= x y) : Comparison; true if y is greater than or equal to x
+    '<=':       {x::y::rest ->
+                    if (rest) { throw "'<=' only takes 2 arguments; at line $lineno" }
+                    x <= y
+                }
+
+    #H (> x y) : Comparison; true if y is less than x
+    '>':        {x::y::rest ->
+                    if (rest) { throw "'>' only takes 2 arguments; at line $lineno" }
+                    x > y
+                }
+
+    #H (=> x y) : Comparison; true if y is less than or equal to x
+    '>=':        {x::y::rest ->
+                    if (rest) { throw "'>=' only takes 2 arguments; at line $lineno" }
+                    x >= y
+                }
+
+    #H (== x y) : Comparison; true if x equals y
+    '==':       {x::y::rest ->
+                    if (rest) { throw "'==' only takes 2 arguments; at line $lineno" }
+                    x == y
+                }
+
+    #H (== x y) : Comparison; true if x doesn't equal y
+    '!=':       {x::y::rest ->
+                    if (rest) { throw "'!=' only takes 2 arguments; at line $lineno" }
+                    x != y
+                }
+
+    #H (match <str> <pattern>) or (match <list> <pattern>) : Does a regex match against a list or string.
+    'match':    {x::y::rest ->
+                    if (rest) { throw "'match' only takes 2 arguments; at line $lineno" }
+                    if (x is [<TinyList>]) {
+                        x |> matchall(y)
+                    }
+                    else {
+                        x ~ y
+                    }
+                }
+
+    #H (cons <obj> <obj>) : Construct a list from its arguments e.g. (cons 1 '(2 3)) == (1 2 3)
+    'cons':     {fst::snd::Rest ->
+                    if (rest) { throw "cons: only takes 2 arguments; at line $lineno" }
+                    fst ++ snd
+                }
+
+    #H (list <args...>) : Return the arguments as a list e.g. (list 1 (2 3) 4) == (1 (2 3) 4)
+    'list':     {argList -> argList}
+
+    #H (car <list>) : Return the first item from the list e.g. (car '(1 2 3)) == 1
+    'car':      {lst::rest ->
+                    if (rest) { throw "car: only takes 1 argument; at line $lineno" }
+                    if (lst) {
+                        if (lst is [<TinyList>]) {lst.Head()} else {lst}
+                    }
+                }
+
+    #H (cdr <list>) : Return all but the first item from a list e.g. (cdr '(1 2 3)) == '(2 3)
+    'cdr':      {lst::rest ->
+                    if (rest) { throw "cdr: only takes 1 argument; at line $lineno" }
+                    if (lst) {
+                        if (lst is [<TinyList>]) {lst.Tail()} else {[]}
+                    }
+                }
+
+    #H (nth <int> <list>) : Return the nth item from the list
+    'nth':      {lst::index::rest ->
+                    if (IsList(lst) == false || IsNumber(index) == false || rest) {
+                        throw "nth: takes 2 arguments: (nth <list> <index>); at line $lineno"
+                    }
+
+                    if ([<math>].Abs(index) > lst.Count-1) {
+                        throw "nth: index $index is greater than the length of the list (${lst.Count}); at line $lineno"
+                    }
+
+                    lst[index]
+                }
+
+    #H (append args...) : Append lists together
+    'append':     {argList -> result = []; foreach (a in arglist) { result += a }; result }
+
+    #H (print args...) : Print out the argument as strings e.g. (print "The value of x ix" x)
+    'print':      {argList -> argList |> join ' ' |> print }
+
+    #H (println args...) : Print out the argument as strings followed by a newline e.g. (print "The value of x ix" x)
+    'println':    {argList -> argList |> join ' ' |> println }
+
+    #H (printlisp <s-expr>) : Print out the arguments as formatted s-expressions
+    'printlisp':    {argList -> argList |> join ' ' |> printlisp }
+
+    #h (printlist '(1 2 3 4) : print out list a list of objects in order
+    'printlist':    {arglist -> arglist |> printList}
+
+    #h (outhost <object>) : Use PowerShell's Out-Host command to print out an object
+    'OutHost':     {arglist ->
+                        if (state._pipelineInput) {
+                            state._pipelineInput |> shell 'Out-Host'
+                        }
+                        else {
+                            arglist |> shell 'Out-Host'
+                        }
+                    }
+
+    #h (info "information string") : Print out an information string
+    'info':    {argList -> argList |> join ' ' |> info }
+
+    #H (error "error string") : Print out an error string
+    'error':    {argList -> argList |> join ' ' |> error }
+
+    #H (fmt "{0} {1}" '(1 2)) : Format a string with holes
+    'fmt':      {fmtStr::argList -> fmtStr -f argList}
+
+    #H (eval s-expr) :  Evaluate an s-expression
+    'eval':     {lst::rest ->
+                    if (rest) { throw "eval: only takes 1 argument; at line $lineno" }
+                    if (lst) {
+                        sexpreval(lst)
+                    }
+                }
+
+    #H (parse string) : parse a string into an s-expression
+    'parse':     {text::rest ->
+                    if (rest) { throw "parse: only takes 1 argument; at line $lineno" }
+                    text |> parseSexpr
+                }
+
+
+    #H (range low hi)  (range low hi step) :  Return a range of numbers
+    'range':    {lower::upper::[] -> lower .. upper }
+    'range':    {lower::upper::step::[] -> lower .. upper .. step }
+    'range':    {_ -> throw "range: invalid number of arguments; only two or three are allowed.; at line $lineno" }
+
+    #H (readtext <filename>) : read the text of a file as a single string
+    'readtext': { files ->
+                    text = files |> readtext
+                    text
+                }
+
+    #H (readfile [<pattern> [<lambda>]]) : Read a file as a collection of lines, optionally filtering with a regex or applyiing a lambda
+    'readfile': { files::pattern::lambda::[] -> files |> readfile(pattern, lambda) }
+    'readfile': { files::pattern::[]-> files |> readfile(pattern) }
+    'readfile': { files::[]-> files |> readfile }
+    'readfile': { _ -> "readfile: command syntax is '(readfile [pattern [lambda]])'"}
+
+    #H (readline ['prompt string']) : Read a line from the user with an optional prompt string
+    'readline': {prompt::[] -> readline(prompt)}
+    'readline': {readline()}
+    'readfile': {_ -> "readline: function syntax is '(readline [prompt])'"}
+
+    #H (vars) : Return the variable table (returns the actual table not a copy)
+    'vars':     { symbolTable }
+
+    #H (help [<pattern>) :  Print out the help for functions and special forms; optionally taking a pattern to filter what's returned.
+    'help':     {pattern::_ ->
+                    if (! pattern) {
+                        alert("Tiny Lisp Functions and Special Forms")
+                        alert("=====================================")
+                        pattern = r/./
+                    }
+
+                    _ = readfile("tinylisp.tiny", "^ *#H") {
+                        it |> split ':' ~ syntax::description::_ then {
+                            if (syntax ~ "$pattern") {
+                                println(syntax -~ '^ *#H *')
+                                info("{0}\n", utils.ChompAll(description.Trim(), 80) |> join "\n")
+                            }
+                        }
+                    }
+                }
+    'help':     { this.help(null) }
+
+    #H (cls) : Clear the screen
+    'cls':      {cls()}
+
+    #H (set 'a 123) : Dynamically set a variable
+    'set':      {var::value::_ ->
+                    if (! var) { throw "set: the name of the variable to set can't be null or empty; at line $lineno" }
+                    if (var is [<Atom>]) {
+                        var = var.Value
+                    }
+
+                    symbolTable[var] = value
+                    value
+                }
+
+    #H (get 'varName) : Get the value of the named variable.
+    'get':      {var::_ ->
+                    if (! var) { throw "get: the name of the variable to get can't be null; at line $lineno" }
+                    getVariable(var)
+                }
+
+    ## (apply '+ (1 2 3) : Apply a function to a list
+    'apply':    {func::list::[] -> sexpreval(func ++ list) }
+    'apply':    {_ -> 'apply takes two arguments: the function to apply and the value to which it is applied; at line $lineno'}
+
+    #H (pipe-each <function> : Apply a function to pipeline input
+    'pipe-each': {funcToApply::[] ->
+                    if (state._pipelineInput == null) {
+                        throw "each-pipe: must be executed inside a (pipe ...) expression; at line $lineno"
+                    }
+
+                    foreach (obj in state._pipelineInput) {
+                        sexpreval(funcToApply ++ obj)
+                    }
+                }
+    'pipe-each': {_ -> throw "pipe-each: takes a function to apply in the pipeline.; at line $lineno" }
+
+    #H (load 'fileToLoad) :  Load and evaluate a tinylisp file (extension is .tl)
+    'load':     {argslist ->
+                    foreach (file in argslist) {
+                        if (file is [<atom>]) {
+                            file = file.Value
+                        }
+
+                        if (file !~ r/\.tl$/) {
+                            file += '.tl'
+                        }
+                        text = readtext(file)
+                        exprlist = text |> parseSexpr
+                        foreach (item in exprlist) {
+                            _ = sexpreval (item)
+                        }
+                    }
+                }
+
+    #H (edit 'nameOfFile) : Start the editor on the specified file.
+    'edit':     {file::[] -> edit(file) }
+    'edit':     {_ -> throw "edit: only takes 1 argument: the name of the file to edit; at line $lineno" }
+
+    #H (getdate) :  Return the current date.
+    'getdate':  { GetDate() }
+
+    #H (mapcar <function> <list>) : Map a function onto each element of a list
+    'mapcar':   {func::list::[] -> foreach (item in list) {sexpreval(func ++ item)}}
+    'mapcar':   {_ -> throw 'mapcar: takes 2 arguments: a function and a list; at line $lineno'}
+
+    #H (where <func> <list>) : Filter a list of objects using a predicate function
+    'where':    {func::list::[] -> list |> where { sexpreval([func, it]); } }
+    'where':    {_ -> throw "where: takes 2 arguments: a filter function and a list to filter.; at line $lineno"}
+
+    #H (split <string>) (split <string> <pattern>) : Split a string n spaces or with an optional pattern
+    'split':    {str::pattern::[] -> str |> split(pattern) }
+    'split':    {str::[] -> str |> split(r/[ \n\t\r]+/) }
+    'split':    {_ -> throw "split: only takes 1 or 2 arguments; at line $lineno" }
+
+    #H (join <listToJoin> [<separatorString>]) : Join a list into a string with an optional separator string
+    'join':     {lst::separator::[] -> lst |> join(separator)}
+    'join':     {lst::[] -> lst |> join}
+    'join':     {_ -> throw "join: takes 1 or 2 arguments: (join <list> [<separator>]); at line $lineno"}
+
+    #H (tochars <obj>) : Converts its argument to a character list.
+    'tochars':   {object::[] -> "$object".ToCharArray().AsList() }
+    'tochars':   {_ -> throw "tochars: takes 1 argument - the string to split into chars; at line $lineno"}
+
+    #H (replace <string> <pat> [<replacement>]) : replace substrings in string; an optional replacement string can be specified. 
+    'replace': {str::pat::rpl::[] -> str |> replace(pat, rpl)}
+    'replace': {str::pat::[] -> str |> replace(pat)}
+    'replace': {_ -> throw "replace: only takes 2 or 3 arguments; at line $lineno" }
+
+    #H (sort <list> [<key>]) : Sort a list; an option property to sort on may be specified.
+    'sort':    {lst::key::[] -> lst |> sort(key)}
+    'sort':    {lst::[] -> lst |> sort }
+    'sort':    {_ -> throw "sort: only 1 or 2 arguments: (sort <list> [<propToSortOn>]); at line $lineno"}
+
+    #H (distinct <list>) : return only the distinct elements from a list
+    'distinct': {lst::[] -> lst |> distinct}
+    'distinct': {_ -> throw 'distinct: only takes 1 argument; at line $lineno'}
+
+    #H (sqrt <args...>) : Compute the square root for each argument
+    'sqrt':     {argslist ->
+                    if (argslist.Count == 1) {
+                        [<math>].Sqrt(argslist[0])
+                    }
+                    else {
+                        argslist |> map([<math>].Sqrt)
+                    }
+                }
+
+    #H (length <obj>) : Get the length of the object.
+    'length':   {obj::[] -> getlength(obj)}
+    'length':   {_ -> throw "length: only takes 1 argument; at line $lineno"}
+
+    #H (isnil <obj>) : Return true if the object is nil
+    'IsNil':   {val::_ -> if (val == null || val == []) {true} else {false}; }
+
+    #H (isbound <nameOfVariable>) : returns true if the symbol is bound.
+    'IsBound':   {name::[] -> symbolTable :> name}
+    'IsBound':   {_ -> throw "IsBound: only takes 1 argument; at line $lineno"}
+
+    #H (islist <obj>) : Returns true if the object is a list
+    'IsList':    {val::[] -> IsList(val) }
+
+    #H (isstring <obj>) : Returns true if the object is a string
+    'IsString':  {val::[] -> val is [<string>]}
+    'AsString':  {val::[] -> "$val"}
+
+    #H (isnumber <obj>) : Returns true if the object is a number (int, long, double, etc.)
+    'IsNumber':  {val::[] -> IsNumber(val)}
+
+    #H (asnumber <obj>) : Converts its argument to a number.
+    'AsNumber':  {val::[] -> AsNumber(val) }
+
+    #H (isbool <object>) : Returns true if the object argument is a boolean
+    'IsBool':   {val::[] -> val is [<bool>]}
+
+    #H (asbool <object>) : Converts its argument object into a boolean
+    'AsBool':   {val::[] -> AsBool(val)}
+
+    #H (not <object>) : Returns the boolean complement to the argument object.
+    'Not':   {value::[] -> not(value)}
+    'Not':   {_ -> throw "Not:: only takes 1 argument; at line $lineno"}
+
+    #
+    # Functions for dealing with objects
+    #
+    
+    #H (type <typeName>) : Converts its type name argument to that type.
+    'type':     {val::[] ->
+                    concreteType = val as [<type>];
+                    if (concreteType == null) {
+                        throw "type: value '$type' could not be converted into a type object; at line $lineno"
+                    }
+                    concreteType
+                }
+    'type':     {_ -> throw "type: takes 1 argument which must be the name of a type; at line $lineno" }
+
+    #H (as-type <objectList) : Converts (casts) a list of objects into a specific type
+    'as-type':  {type::objectList::[] ->
+                    type = type as [<type>];
+                    if (type == null) {
+                        throw "Cannot convert '$type' into a type.; at line $lineno"
+                    }
+
+                    result = foreach (obj in objectList) {
+                        obj = obj as type
+                        if (obj == null) {
+                            throw "cannot convert object '$obj' to type '$type'; at line $lineno"
+                        }
+                        obj
+                    }
+                    result
+                }
+
+    #H (get-members <obj>) : Get the public members on an object
+    'getmembers': {val::[] -> val |> GetMembers}
+
+    #H (get-type obj) : Get the type of an object
+    'get-type': {item::[] ->
+                    if (item == null) { throw "get-type: requires a non-null argument; at line $lineno" }
+                    item.GetType()
+                }
+    'get-type': {_ -> throw "get-type: only takes 1 argument; at line $lineno" }
+
+    #H (new <type> constructorArgs...) : Construct an instance of an object.
+    'new':      {type::constructorArgs ->
+
+                    concreteType = type as [<type>];
+                    if (concreteType == null) {
+                        throw "new: value '$type' could not be converted into a type object; at line $lineno"
+                    }
+
+                    result = match constructorArgs.Count
+                    | 0 -> concreteType.new()
+                    | 1 -> concreteType.new(constructorArgs[0])
+                    | 2 -> concreteType.new(constructorArgs[0], constructorArgs[1])
+                    | 3 -> concreteType.new(constructorArgs[0], constructorArgs[1], constructorArgs[2])
+                    | 4 -> concreteType.new(constructorArgs[0], constructorArgs[1], constructorArgs[2], constructorArgs[3])
+                    |   -> throw ".: Too many constructor arguments were provided: 4 is the maximum supported; at line $lineno"
+                    # Doesn't work with IEnumerables because - PowerShell.
+                    result
+                }
+
+    #H (as <obj> <type>) : Convert as object into tge desired type.
+    'as':       {object::type::[] -> object as type}
+
+    #H (is <object> <type>) : True is the object is of the specified type.
+    'is':       {object::type::[] -> object is type}
+
+    #H (. <object> <memberName> [<arguments> ...]) : Function to invoke methods and read/set properties e.g. '(. (getdate) 'DayOfWeek)'
+    '.':        {object::member::methodArgs ->
+
+                    if (member is [<Atom>]) {
+                        member = member.Value
+                    }
+
+                    result = if (object is [<IDictionary>]) {
+                        val = object[member]
+                        if (val is [<TinyLambda>] || val is [<List[TinyLambda]>]) {
+                            match methodArgs.Count
+                            | 0 -> val()
+                            | 1 -> val(methodArgs[0])
+                            | 2 -> val(methodArgs[0], methodArgs[1])
+                            | 3 -> val(methodArgs[0], methodArgs[1], methodargs[2])
+                            | 4 -> val(methodArgs[0], methodArgs[1], methodargs[2], methodArgs[3])
+                            |   -> throw ".: Too many arguments were provided: 4 is the maximum supported; at line $lineno"
+                        }
+                        elseif (methodArgs.Count == 1) {
+                            object[member] = methodArgs[0]
+                        }
+                        else {
+                            val
+                        }
+                    }
+                    else {
+                        mi = object?."$member"
+                        if (mi == null) {
+                            return null
+                        }
+
+                        if (mi is [<PSMethod>] || mi is [<PSScriptMethod>]) {
+                            match methodArgs.Count
+                            | 0 -> mi()
+                            | 1 -> mi(methodArgs[0])
+                            | 2 -> mi(methodArgs[0], methodArgs[1])
+                            | 3 -> mi(methodArgs[0], methodArgs[1], methodargs[2])
+                            | 4 -> mi(methodArgs[0], methodArgs[1], methodargs[2], methodArgs[3])
+                            |   -> throw ".: Too many arguments were provided: 4 is the maximum supported; at line $lineno"
+                        }
+                        elseif (methodArgs.Count == 1) {
+                            object."$member" = methodArgs[0]
+                        }
+                        elseif (methodArgs.Count > 0) {
+                            throw ".: property '$member' cannot be invoked like a method; at line $lineno"
+                        }
+                        else {
+                            mi
+                        }
+                    }
+
+                    # Convert a collection result to a list
+                    match result
+                    | [<string>] -> result
+                    | [<IEnumerable>] -> {
+                        result.AsList()
+                    }
+                    | -> result
+                }
+
+    #H (setf <object> <propertyName> <value>) : Set the value of the named property on the object to the specified value
+    'setf':     {obj::prop::value::[] ->
+                    if (prop is [<Atom>]) {
+                        prop = prop.Value
+                    }
+                    obj."$prop" = value
+                }
+    'setf':     {_ -> throw "setf: takes 3 values: (setf object propertyName valueToSet); at line $lineno" }
+
+    #H (getf <object> <propertyName>) : Get the value of the named property from the object passed in
+    'setf':     {obj::prop::[] ->
+                    if (prop is [<Atom>]) {
+                        prop = prop.Value
+                    }
+                    obj."$prop"
+                }
+    'setf':     {_ -> throw "getf: takes 2 arguments: (getf object propertyName); at line $lineno" }
+
+    #H (object '(a 1) '(b 2) ...) : Create an object (dictionary) with the specified properties and values
+    'object':   {arglist ->
+                    result = [<Dictionary[string,object]>].new([<StringComparer>].OrdinalIgnoreCase)
+                    matchlist arglist
+                    | name::value::[]   -> result["$name"] = sexpreval(value)
+                    | name::value       -> result["$name"] = sexpreval(value)
+                    | name::[]
+                    | name              -> result["$name"] = null
+                    |                   -> throw "object: Invalid member expression; at line $lineno"
+                    result
+                }
+
+    #H (keys <dict>) : Get the keys from a dictionary
+    'keys':     {dict::[] -> keys(dict)}
+
+    #H (values <dict>) : Get the values from a dictionary
+    'values':   {dict::[] -> values(dict)} 
+
+    #H (tiny expression...) : Execute a tiny expression e.g. (tiny 2 '+ 2)
+    'tiny':     {argList -> eval(argList |> join ' ')}
+
+    #H (pwsh expression...) : Execute a PowerShell expression e.g. (pwsh "ls | sort -desc length | select -first 5")
+    'pwsh':      {argList -> shell(arglist |> join ' ')};
+
+    #H (get-random number [min max]) : Generates a sequence of random numbers
+    'get-random': {number::min::max::[] -> getrandom(number, min, max)}
+    'get-random': {min::max::[] -> getrandom (min, max)}
+    'get-random': {max::[] -> getrandpm(max)}
+    'get-random': {_ -> throw "get-random: this function takes 1, 2 or 3 arguments; at line $lineno"}
+
+    # and define some useful variables
+
+    #H IsWindows : True if the platform is Windows
+    'IsWindows': IsWindows;
+
+    #H IsMacOS : True if the platform is MacOS
+    'IsMacOS':  IsMacOS;
+
+    #H IsLinux : True if the platform is Linux
+    'IsLinux':  IsLinux;
+
+    # IsUnix : True if the platform is UNIX
+    'IsUnix':   (IsLinux || IsMacOS);
+
+    # PI : THe value of PI
+    'PI':       [<math>].Pi;
+
+    # PID : The current process ID.
+    'PID':      pid;
+
+    # nil : The constant NIL
+    'Nil':      null
+}
+
+#######################################################################
+#
+# Where regular forms have their arguments evaluated, special forms
+# receive them unevaluated and can do what they want with them. This
+# allows for control structures, etc.
+#
+specialForms = {
+
+    #H (foreach var (list...) (body1...) ...) : Special form that implements the 'foreach' statement
+    'foreach':  {var::lst::loopbody ->
+                    if (IsList(var)) {
+                        throw "foreach: the loop variable cannot be a list; at line $lineno"
+                    }
+
+                    if (var is [<Atom>]) {
+                        var = var.Value
+                    }
+
+                    result = null
+                    oldVar = symbolTable[var]
+                    try {
+                        foreach (v in sexpreval(lst)) {
+                            symbolTable[var] = v
+                            foreach (func in loopbody) {
+                                result = sexpreval(func)
+                            }
+                        }
+                    }
+                    finally {
+                        symbolTable[var] = oldVar
+                    }
+                    result
+                }
+
+
+    #H (while (cond..) (body1...) ...) : Special form that implements the 'while' statement
+    'while':    {cond::loopbody ->
+                    while (sexpreval(cond)) {
+                        foreach (func in loopbody) {
+                            result = sexpreval(func)
+                        }
+                        result
+                    }
+                }
+
+    #H (if (< x 5) (ifpart...) [(elsePart...)]) : Special form that implements the if/else statement 
+    'if':       {condition::ifPart::[] ->
+                    if (sexpreval(condition)) {
+                        sexpreval(ifPart)
+                    }
+                }
+
+    'if':       { condition::ifPart::elsePart::[] ->
+                    condResult = sexpreval(condition)
+                    if (condResult) {
+                        sexpreval(ifPart)
+                    }
+                    else {
+                        sexpreval(elsePart)
+                    }
+                }
+
+    'if':       { rest -> throw "if: invalid if expression: too many arguments; at line $lineno" }
+
+    #H (cond (test1 action1) (test2 action2) ... ) : Special form that implements the 'cond' statement.
+    'cond':     {arglist ->
+
+                    foreach (pair in arglist) {
+                        if (pair ~ cond::action::[]) {
+                            condresult = sexpreval(cond)
+                            if (condresult) {
+                                foreach (expr in action) {
+                                    result = sexpreval(expr)
+                                }
+                                return result
+                            }
+                        }
+                        else {
+                            throw "Invalid 'cond' expression: $pair; at line $lineno"
+                        }
+                    }
+                } 
+
+
+    #H (setq varName <value expr>) : Special form for setting variables without quoting the name.
+    'setq':      {var::value::_ ->
+                    if (! var) { throw "setq: the name of the variable to set can't be null; at line $lineno" }
+
+                    if (var is [<Atom>]) {
+                        var = var.Value
+                    }
+
+                    value = sexpreval(value)
+                    symbolTable[var] = value
+                    value
+                }
+
+    #h (define (name args...) (body) ...) : Special form for defining a function
+    'define':      {nameList::body ->
+                    if (! nameList) { throw "define: the name of the function to define can't be null; at line $lineno" }
+
+                    if (! (name::argList = nameList)) {
+                        throw "define: failed to match name::arglist pattern; at line $lineno"
+                    }
+
+                    if (name is [<Atom>]) {
+                        name = name.Value
+                    }
+
+                    body = 'lambda' ++ (arglist ++ body)
+                    symbolTable[name] = body
+                    body
+                }
+
+    #H (define (name args...) (body) ...) : special form for defining a special form.
+    'sform':      {nameList::body ->
+                    if (! nameList) { throw "define: the name of the function to define can't be null; at line $lineno" }
+
+                    if (! (name::argList = nameList)) {
+                        throw "define: failed to match name::arglist pattern; at line $lineno"
+                    }
+
+                    if (name is [<Atom>]) {
+                        name = name.Value
+                    }
+
+                    body = 'lambda' ++ (arglist ++ body)
+                    specialForms[name] = body
+                    body
+                }
+
+    # (do <expr1> <expr2> ...) : Special form for invoking a list of forms in sequence then returning the last value.
+    'do':       {body ->
+                    foreach (be in body) {
+                        result = sexpreval(be)
+                    }
+                    result
+                }
+
+    # (time <expr>) : Special form for timing the execution of an s-expression
+    'time':     {listToEval ->
+                    result = time {
+                        foreach (element in listToEval) {
+                            sexpreval(element)
+                        }
+                    }
+                    result
+                }
+
+    # (let ((var1 val1) (var2 val2)...) <expr1> <expr2> ...) : Special form implementint the let functionality which allows for local variables.
+    'let':      {varList::body ->
+                    if (IsList(varList) == false) {
+                        throw "let: the syntax for let is '(let ((name1 expr1) (name2 expr2) ...) s-expressions...); at line $lineno'"
+                    }
+
+                    bindList = {}
+                    foreach (pair in varlist) {
+                        if (pair ~ name::sexpr::[]) {
+                            if (name is [<Atom>]) {
+                                name = name.Value
+                            }
+
+                            bindList[name] = sexpreval(sexpr)
+                        }
+                        else {
+                            throw "let: malformed var/value pair: ($pair); at line $lineno"
+                        }
+                    }
+
+                    oldVals = {}
+                    bindList |> foreach {
+                        n = it.name
+                        oldVals[n] = symbolTable[n]
+                        symbolTable[n] = it.value
+                    }
+
+                    try {
+                        foreach (expr in body) {
+                            result = sexpreval(expr)
+                        }
+                    }
+                    finally {
+                        oldVals |> foreach {
+                            n = it.name
+                            symbolTable[n] = it.Value
+                        }
+                    }
+
+                    result
+                }
+
+    #H (pipe (get-process) (sort-object -descending true 'ws) (select-object -first 5)) : Orchastrate a pipeline of commands, especially PowerShell commands
+    'pipe':     {arglist ->
+                    result = null
+                    oldValue = symbolTable['_pipeline-input']
+                    try {
+                         foreach (cmd in arglist) {
+                            state._pipelineInput = [] + sexpreval(cmd)
+                            symbolTable['_pipeline-input'] = state._pipelineInput
+                         }
+                    }
+                    finally {
+                         # the output of the last command becomes the overall result
+                        result = state._pipelineInput
+                        state._pipelineInput = null
+                        symbolTable["_pipeline-input"] = oldValue
+                    }
+
+                    result
+                }
+
+    #H (call <fn> <args...>) :Special form for calling a function.
+    'call':     {argsList ->
+                    sexpreval(argslist)
+                }
+
+    #H (and values...) : Special form that returns false if any of the argument values are false; args are only evaluated until the first false value 
+    'and':      {arglist ->
+                    foreach (expr in arglist) {
+                        res = sexpreval(expr) as [<bool>];
+                        if (! res) {
+                            return false
+                        }
+                    }
+                    return true
+                }
+
+    #H (or values...) : Special form that returns true if any of the argument values are true; args are only evaluated until the first true value 
+    'or':      {arglist ->
+                    foreach (expr in arglist) {
+                        res = sexpreval(expr) as [<bool>];
+                        if (res) {
+                            return true
+                        }
+                    }
+                    return false
+                }
+                    
+}
+
+############################################################
+#
+# The REPL loop
+#
+fn TinyLisp {
+    Alert("Welcome to Tiny LISP. Type 'quit' to quit or '(help)' to get help.\n")
+    while (true) {
+        try {
+            text = readline("tl: ")
+            if (text == "\") {
+                info "Entering multiline mode; type ;; to exit."
+                lines = ""
+                lc = 1;
+                while ((line = readline("$lc > ")) != ';;') {
+                    lines += line + "\n"
+                    lc += 1
+                }
+                text = lines
+            }
+
+            # Ignore whitespace and empty lines
+            if (Text ~ r/^ *$/) {
+                continue
+            }
+
+            # If it's 'q' then quit the interpreter.
+            if (text ~ '^ *q') {
+                break
+            }
+
+            # parse the text into s-expressions
+            exprlist = text |> parseSexpr
+
+            # evaluate the expressions
+            foreach (item in exprlist) {
+                result = sexpreval (item)
+                result |> printLisp
+                println()
+            }
+        }
+        catch {
+            error("TinyLisp Error: " + it.message)
+        }
+    }
+}
+
+############################################################
+#
+# Print out an s-expression
+#
+fn printLisp list {
+
+    fn printObject obj {
+
+        if (obj == null) {
+            print '()'
+            return
+        }
+
+        firstItem = true
+        print '(object'
+        obj |> foreach {
+            print ' '
+            print('(' + it.key + ' ')
+            printlisp(it.value)
+            print(')')
+        };
+        print ')'
+    };
+
+    # Print lists
+    if (IsList(list)) {
+        print('(')
+        firstItem = true
+        foreach (item in list) {
+            if (firstItem) {
+                firstItem = false
+            }
+            else {
+                print(' ')
+            }
+
+            if (IsList(item)) {
+                printLisp(item)
+            }
+            elseif (item == null) {
+                print('nil')
+            }
+            elseif (item is [<IDictionary>]) {
+                printObject(item)
+            }
+            elseif (item ~ r/[ \n\r\t]/) {
+                # If the item contains spaces, quote it
+                print("""$item""")
+            }
+            else {
+                print(item)
+            }
+        }
+
+        print(')')
+    }
+    elseif (list == null) {
+        print('nil')
+    }
+    elseif (list is [<IDictionary>]) {
+        printObject(list)
+    }
+    else {
+        # print atoms
+        print(list)
+    }
+}
+
+############################################################
+#
+# Start the REPL...
+#
+TinyLisp()

@@ -1,0 +1,73 @@
+#######################################################################
+#
+# Simple example of .NET socket programming with Tiny: an NTP client
+# (Adapted from an MSDN C# sample).
+#
+#######################################################################
+
+# The name of the NTP server to query
+ntpServer = "time.windows.com"
+
+# NTP message size - 16 bytes of the digest (RFC 2030)
+ntpData = [<byte[]>].new(48)
+
+# Setting the Leap Indicator, Version Number and Mode values
+# LI = 0 (no warning), VN = 3 (IPv4 only), Mode = 3 (Client Mode)
+ntpData[0] = [<byte>] 0x1b
+
+# get the IP address of the NTP server
+addresses = [<System.Net.Dns>].GetHostEntry(ntpServer).AddressList
+
+# The UDP port number assigned to NTP is 123
+ipEndPoint = [<System.Net.IPEndPoint>].new(addresses[0], 123)
+
+# create the socket object; NTP uses UDP
+socket = [<System.Net.Sockets.Socket>].new(
+            [<System.Net.Sockets.AddressFamily>].InterNetwork,
+            [<System.Net.Sockets.SocketType>].Dgram,
+            [<System.Net.Sockets.ProtocolType>].Udp)
+
+# Set timeout to prevent hang if NTP is blocked
+socket.ReceiveTimeout = 3000
+
+# Query the NTP server
+socket.Connect(ipEndPoint)
+socket.Send(ntpData)
+socket.Receive(ntpData)
+socket.Close()
+
+# Offset to get to the "Transmit Timestamp" field (time at which the reply
+# departed the server for the client, in 64-bit timestamp format.
+serverReplyTime = [<byte>] 40
+
+# Get the seconds part
+intPart = [<BitConverter>].ToUInt32(ntpData, serverReplyTime)
+
+# Get the seconds fraction part
+fractPart = [<BitConverter>].ToUInt32(ntpData, serverReplyTime+4)
+
+# Utility to swap the endianness of a word
+fn SwapEndianness word ->
+    bor(
+        bor(
+            bshl(band(word, 0xff), 24),
+            bshl(band(word, 0xff00), 8)),
+        bor(
+            bshr(band(word, 0xff0000), 8),
+            bshr(band(word, 0xff000000), 24)))
+
+# Convert From big-endian to little-endian
+intPart   = SwapEndianness(intPart)
+fractPart = SwapEndianness(fractPart)
+
+# convert to milliseconds
+milliseconds = intpart*1000 + fractPart*1000 / 0x1_0000_0000
+
+# Compute the UTC time then add the milliseconds.
+networkDateTime = [<DateTime>]
+    .new(1900, 1, 1, 0, 0, 0, [<DateTimeKind>].Utc)
+    .AddMilliseconds(milliseconds)
+
+# Finally convert it to local time and return it.
+networkDateTime.ToLocalTime()
+

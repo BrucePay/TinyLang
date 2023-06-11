@@ -1,0 +1,163 @@
+#################################################################
+#
+# Routine to parse a list into s-expressions
+#
+#################################################################
+
+fn parselisp text {
+    liststack   = []
+    list        = []
+    token       = []
+    string      = []
+    inString    = false
+    inComment   = false
+    quoteStack  = []
+    quoted      = false
+
+    matchlist (text.ToCharArray())
+    | {inComment} -> 
+        if (it ~ r/[\r\n]/) {
+            inComment = false
+        }
+
+    | {inString} ->
+        if (it == '"') {
+            list.Add(string.join())
+            inString = false
+        }
+        else {
+            string.Add(it)
+        }
+
+    | "'" -> quoted = true
+
+    | '(' -> {
+                liststack.Push(list)
+                quoteStack.Push(quoted)
+                quoted = false
+                list = []
+            }
+
+    | ')' -> {
+                if (token) {
+                    if (quoted) {
+                        list.Add(['quote', token.Join()])
+                        quoted = false
+                    }
+                    else {
+                        list.Add(token.Join())
+                    }
+                    token = []
+                }
+
+                oldList = liststack.Pop()
+                quoted = quoteStack.Pop()
+                if (quoted) {
+                    oldList.Add(['quote', list])
+                    quoted = false
+                }
+                else {
+                    oldList.Add(list)
+                }
+
+                list = oldList
+            }
+
+    | '"' -> inString = true
+
+    | '#' -> inComment = true
+
+    | r/[ \r\n\t]/ ->
+        if (token) {
+            if (quoted) {
+                list.Add(['quote', token.Join()])
+                quoted = false
+            }
+            else {
+                list.Add(token.Join())
+            }
+            token = []
+        }
+
+    | -> token.Add(it)
+
+    list
+}
+
+#text = readline('::')
+text = readtext("utils.tl")
+
+
+list = time { parseLisp(text) }
+foreach (item in list) { println("\n=============================\n"); printlisp(item) }
+println("\ndone\n")
+fn printLisp list {
+
+    fn printObject obj {
+
+        if (obj == null) {
+            print '()'
+            return
+        }
+
+        firstItem = true
+        print '(object '
+        obj |> foreach {
+            if (firstItem) {
+                firstItem = false
+            }
+            else {
+                print ' '
+            }
+
+            print('(' + it.key + ' ')
+            printlisp(it.value)
+            print(')')
+        };
+        print ')'
+    };
+
+    # Print lists
+    if (IsList(list)) {
+        print('(')
+        firstItem = true
+        foreach (item in list) {
+            if (firstItem) {
+                firstItem = false
+            }
+            else {
+                print(' ')
+            }
+
+            if (IsList(item)) {
+                printLisp(item)
+            }
+            elseif (item == null) {
+                print('nil')
+            }
+            elseif (item is [<IDictionary>]) {
+                printObject(item)
+            }
+            elseif (item ~ r/[ \n\r\t]/) {
+                # If the item contains spaces, quote it
+                print("""$item""")
+            }
+            else {
+                print(item)
+            }
+        }
+
+        print(')')
+    }
+    elseif (list == null) {
+        print('nil')
+    }
+    elseif (list is [<IDictionary>]) {
+        printObject(list)
+    }
+    else {
+        # print atoms
+        print(list)
+    }
+}
+

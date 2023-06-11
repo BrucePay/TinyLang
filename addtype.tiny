@@ -1,0 +1,21 @@
+###############################################################
+#
+# Simple script to test calling AddType from Tiny
+#
+###############################################################
+
+import utils
+
+utils.AddType('
+
+    public class FooBar
+    {
+        public static string Message() {
+            return "Hello world!";
+        }
+    }
+
+');
+
+([<type>] 'FooBar').Message() |> alert
+

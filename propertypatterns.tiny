@@ -1,0 +1,38 @@
+######################################################################
+#
+# Some simple examples shwoing the use of property patterns
+#
+######################################################################
+
+import 'utils'
+import 'datautils'
+
+println("------------------------------------------------------")
+
+matchlist ls()
+| {:: Extension:'.tiny' name:name ::} -> println("Tiny file {0}", name)
+| {:: Extension:'.ps1' name:name ::}  -> println("+ PowerShell file {0}", name)
+| {:: Extension:'.dll' name:name ::}  -> println("-- Text file {0}", name)
+|                                     -> println("???? Not a tiny file: {0}", it.name)
+
+println("------------------------------------------------------")
+
+println("Tiny files longer than 2000 characters.")
+
+foreach ({:: Extension: '.tiny' length:{it > 2000} Name: name ::} in ls()) {println(name)}
+
+println("------------------------------------------------------")
+
+println("Processes with WS > 60_000_000")
+
+foreach ({::ws:{it > 60_000_000} ID:id ProcessName:pn ::} in utils.GetProcesses()) {
+    println("{0,30} {1}", pn, id)
+}
+
+println("------------------------------------------------------")
+
+println("Print tiny files longer than 3000 chars using the matches operator *~");
+
+( ls() *~ {:: Extension: '.tiny' Length:{it > 3000} ::}) |> OutHost
+
+

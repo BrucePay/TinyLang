@@ -1,0 +1,181 @@
+###################################################################
+#
+# convenience module - makes the methods on [<Environment>] easier to
+# use with 'env' e.g. env.getOsVersion()
+#
+###################################################################
+
+Environment = {
+
+    getCommandLine: [<environment>].get_CommandLine;
+
+    cwd: { path ->
+            if (path != null) {
+                [<environment>].Set_CurrentDirectory(path)
+            }
+            else {
+                [<environment>].get_CurrentDirectory()
+            }
+    }
+
+    CurrentManagedThreadId: [<environment>].get_CurrentManagedThreadId;
+
+    HasShutdownStarted:     [<environment>].get_HasShutdownStarted;
+
+    Is64BitProcess:         [<environment>].get_Is64BitProcess;
+
+    Is64BitOperatingSystem: [<environment>].get_Is64BitOperatingSystem;
+
+    OSVersion:              [<environment>].get_OSVersion;
+
+    GetProcessorCount:      [<environment>].get_ProcessorCount;
+
+    StackTrace:             [<environment>].get_StackTrace;
+
+    TickCount:              [<environment>].get_TickCount;
+
+    IsUserInteractive:      [<environment>].get_UserInteractive;
+
+    Version:                [<environment>].get_Version;
+
+    WorkingSet:             [<environment>].get_WorkingSet;
+
+    UserName:               [<environment>].get_UserName;
+
+    UserDomainName:         [<environment>].get_UserDomainName;
+
+    GetLineEnding:          [<environment>].get_NewLine;
+
+    SystemPageSize:         [<environment>].get_SystemPageSize;
+
+    GetExitCode: { code -> 
+        if (code == null) {
+            [<environment>].get_ExitCode()
+        }
+        else {
+            [<environment>].set_ExitCode(code)
+        }
+    }
+
+
+    MachineName:            [<environment>].get_MachineName;
+
+    SysDir:                 [<environment>].get_SystemDirectory;
+
+    Get:                    [<environment>].GetEnvironmentVariable;
+
+    GetAll:                 [<environment>].GetEnvironmentVariables;
+
+    Set:                    [<environment>].SetEnvironmentVariable;
+
+    Exit:                   [<environment>].Exit;
+
+    FailFast:               [<environment>].FailFast;
+
+    Expand:                 [<environment>].ExpandEnvironmentVariables;
+
+    Args:                   [<environment>].GetCommandLineArgs;
+
+    GetFolderPath:          [<environment>].GetFolderPath;
+
+    Drives:                [<environment>].GetLogicalDrives;
+
+    SpecialFolders:  {
+
+        Desktops:                 [<Environment>].GetFolderPath("Desktop");
+
+        Programs:                 [<Environment>].GetFolderPath("Programs");
+
+        MyDocuments:              [<Environment>].GetFolderPath("MyDocuments");
+
+        Personal:                 [<Environment>].GetFolderPath("Personal");
+
+        Favorites:                [<Environment>].GetFolderPath("Favorites");
+
+        Startup:                  [<Environment>].GetFolderPath("Startup");
+
+        Recent:                   [<Environment>].GetFolderPath("Recent");
+
+        SendTo:                   [<Environment>].GetFolderPath("SendTo");
+
+        StartMenu:                [<Environment>].GetFolderPath("StartMenu");
+
+        MyMusic:                  [<Environment>].GetFolderPath("MyMusic");
+
+        MyVideos:                 [<Environment>].GetFolderPath("MyVideos");
+
+        DesktopDirectory:         [<Environment>].GetFolderPath("DesktopDirectory");
+
+        MyComputer:               [<Environment>].GetFolderPath("MyComputer");
+
+        NetworkShortcuts:         [<Environment>].GetFolderPath("NetworkShortcuts");
+
+        Fonts:                    [<Environment>].GetFolderPath("Fonts");
+
+        Templates:                [<Environment>].GetFolderPath("Templates");
+
+        CommonStartMenu:          [<Environment>].GetFolderPath("CommonStartMenu");
+
+        CommonPrograms:           [<Environment>].GetFolderPath("CommonPrograms");
+
+        CommonStartup:            [<Environment>].GetFolderPath("CommonStartup");
+
+        CommonDesktopDirectory:   [<Environment>].GetFolderPath("CommonDesktopDirectory");
+
+        ApplicationData:          [<Environment>].GetFolderPath("ApplicationData");
+
+        PrinterShortcuts:         [<Environment>].GetFolderPath("PrinterShortcuts");
+
+        LocalApplicationData:     [<Environment>].GetFolderPath("LocalApplicationData");
+
+        InternetCache:            [<Environment>].GetFolderPath("InternetCache");
+
+        Cookies:                  [<Environment>].GetFolderPath("Cookies");
+
+        History:                  [<Environment>].GetFolderPath("History");
+
+        CommonApplicationData:    [<Environment>].GetFolderPath("CommonApplicationData");
+
+        Windows:                  [<Environment>].GetFolderPath("Windows");
+
+        System:                   [<Environment>].GetFolderPath("System");
+
+        ProgramFiles:             [<Environment>].GetFolderPath("ProgramFiles");
+
+        MyPictures:               [<Environment>].GetFolderPath("MyPictures");
+
+        UserProfile:              [<Environment>].GetFolderPath("UserProfile");
+
+        SystemX86:                [<Environment>].GetFolderPath("SystemX86");
+
+        ProgramFilesX86:          [<Environment>].GetFolderPath("ProgramFilesX86");
+
+        CommonProgramFiles:       [<Environment>].GetFolderPath("CommonProgramFiles");
+
+        CommonProgramFilesX86:    [<Environment>].GetFolderPath("CommonProgramFilesX86");
+
+        CommonTemplates:          [<Environment>].GetFolderPath("CommonTemplates");
+
+        CommonDocuments:          [<Environment>].GetFolderPath("CommonDocuments");
+
+        CommonAdminTools:         [<Environment>].GetFolderPath("CommonAdminTools");
+
+        AdminTools:               [<Environment>].GetFolderPath("AdminTools");
+
+        CommonMusic:              [<Environment>].GetFolderPath("CommonMusic");
+
+        CommonPictures:           [<Environment>].GetFolderPath("CommonPictures");
+
+        CommonVideos:             [<Environment>].GetFolderPath("CommonVideos");
+
+        Resources:                [<Environment>].GetFolderPath("Resources");
+
+        LocalizedResources:       [<Environment>].GetFolderPath("LocalizedResources");
+
+        CommonOemLinks:           [<Environment>].GetFolderPath("CommonOemLinks");
+
+        CDBurning:                [<Environment>].GetFolderPath("CDBurning");
+    }
+}
+
+

@@ -1,0 +1,119 @@
+###################################################################
+#
+# Utilities for writing TinyTest tests
+#
+###################################################################
+
+import 'utils'
+import 'IO'
+import 'math'
+
+sw = utils.NewStopWatch()
+
+__filebase = IO.BaseNameNoExtension(__ImportedFrom) -~ r/\.test$/
+
+fn suite name{
+
+    __tinytest_options ?= {
+        pattern:  ''
+        syntax:   false
+        force:    false
+        external: true
+        verbose:  true
+    }
+
+    if (not (name)) {
+        throw "tinytest:suite: test suite was name was null"
+    } 
+
+    if (body == null) {
+        throw format("tinytest:suite: body for test suite [{0}:{1}] was null", __filebase, name)
+    }
+
+    if (not( body is [<TinyLambda>])) {
+        throw format("tinytest:suite: body for test suite must be a lambda not {0}", body.GetType())
+    }
+
+    alert("    Running test suite [{0}:{1}].",__filebase, name)
+    __suite = name
+    sw.start()
+
+    allresults = {}
+    totaltests = 0
+    totalFailures = 0
+    body.InvokeReturnAll()  |> foreach {
+        result = it
+        if (it is [<IDictionary>] ) {
+            totaltests += 1
+            if (not (it.Passed)) {
+                totalFailures += 1
+            }
+            allresults[name + ':' + it.name] = it
+        }
+    }
+
+    sw.Stop()
+    duration = math.floor(sw.Elapsed.TotalMilliSeconds)
+    if (totalFailures) {
+        error("    Completed test suite [{0}:{1}] in {2} ms. Total tests {3}; Failures {4}.",
+            __filebase, name, duration, totaltests, totalFailures)
+    }
+    else {
+        Alert("    Completed test suite [{0}:{1}] in {2} ms. Total tests {3}; Failures {4}.",
+            __filebase, name, duration, totaltests, totalFailures)
+    }
+    allresults
+}
+
+# Test body looks like test 'foo' { test: { } expected: val }
+fn test name {
+    if (not (name)) {
+        throw "tinytest:test: the test name was null."
+    } 
+    if (body == null) {
+        throw format("tinytest:test: The body for test [{0}:{1}:{2}] was null.",__filebase, __suite, name)
+    }
+    if (not( body is [<IDictionary>])) {
+        throw format("tinytest:test: body for a test must be a dictionary not '{0}'.", body.GetType())
+    }
+
+    if ( __tinytest_options.verbose == true) {
+        println("        Running test [{0}:{1}:{2}]", __filebase, __suite, name)
+    }
+
+    testResult =
+            {
+                Name:     name
+                Passed:   true
+                Expected: body.Expected
+                Actual:   null
+                Exception: null
+            }
+
+    try {
+        result = body.Test()
+        testResult.Actual = result
+        if (result == body.Expected) {
+            testResult.Passed = true
+            if ( __tinytest_options.verbose == true) {
+                println("            Passed.")
+            }
+        }
+        else {
+            error("            TEST $__suite:$name FAILED!")
+            error("            Expected: <{0}>", body.Expected)
+            error("            Actual:   <{0}>", result)
+            testResult.Passed = false
+        }
+    }
+    catch {
+        error("            test [{0}:{1}:{2}] raised an exception: {3}", __filebase, __suite, name, it)
+        it |> outhost
+        testResult.Actual = null
+        testResult.Passed = false
+        testResult.Exception = it
+    }
+    return testResult
+}
+
+

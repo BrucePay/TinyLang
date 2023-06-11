@@ -1,0 +1,33 @@
+##################################################################
+#
+# A Tiny script that uses the console module APIs to
+# prompt for some text on the console.
+#
+##################################################################
+
+import 'console'
+
+cls()
+
+console.DrawBox(8, 8, 40, 5)
+
+firstName = console.PromptAt(10, 10, 25, "Enter your first name:")
+lastName  = console.PromptAt(10, 11, 25, "Enter your last name:")
+
+cls()
+
+console.DrawBox(4, 4, 48, 12, 'red')
+console.DrawBox(8, 8, 40, 4)
+console.PrintAt(10,10, "Your name is '$firstName $lastName'")
+
+foreach (timeRemaining in range(3,1)) {
+    Console.PrintAt(10, 14, "Sleeping for " + timeRemaining + " seconds")
+    sleep(1000)
+}
+Console.PrintAt(10, 14, "                      ")
+
+console.SetCursor(0, 20)
+
+println("\nAll done!\n")
+
+

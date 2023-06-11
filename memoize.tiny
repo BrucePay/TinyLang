@@ -1,0 +1,93 @@
+##########################################################################
+#
+# Some examples demonstrating the builtin memoization features in
+# Tiny lambdas. The examples include a recursive Fibonacci computation
+# and a recursive Factorial computations.
+#
+# Basically for functions (lambdas) that aren't associated with an object
+# the '_mes' pointer points to the lambda. The lambda has a private storage
+# table for memoization with three methods IsMemoized(), GetMemoized() and
+# Memoized(). The storage table is created the first time an object/value
+# pair is memoized.
+#
+##########################################################################
+
+#
+# Use the memoization features that are provided on lambdas
+# 
+undef fib
+def   fib 0 -> 1i
+def   fib 1 -> 1i
+def   fib n ->
+            if (_me.IsMemoized(n))
+                { _me.GetMemoized(n) }
+            else
+                { _me.Memoize(n, fib(n-1) + fib(n-2)) }
+
+limit = 75;
+
+alert "\nComputing the Fibonacci sequence from 1 to $limit";
+[0..limit].foreach {
+    println "fib($it) is ${fib(it)}"
+}
+
+#
+# Using another overload of Memoize() that takes a lambda that will be called
+# to compute the value if the value isn't already on the memotable.
+#
+undef fact
+def   fact 0 -> 1i
+def   fact n -> _me.Memoize(n, {n * fact(n-1)})
+
+alert "\n\nComputing the factorial of the numbers from 1 to $limit";
+
+[0..limit].foreach {
+    println "fact($it) is ${fact(it)}"
+}
+
+alert "Clearing the memo tables"
+
+# loop through all of the lambdas, clearing the
+# memo table for each one.
+fib  |> foreach { it.ClearMemoized() }
+fact |> foreach { it.ClearMemoized() }
+
+
+#################################################
+#
+# A function to get the factorial for n. This doesn't
+# use the built-in memoization. Instead if creates 
+# an environment (scope) where a table is bound
+# and then returns a closue containing the table.
+#
+getFact = {
+    fn fact x ->
+        if (memoize :> x) {
+           memoize[x]
+        }
+        else {
+            value = x * fact(x-1) 
+            memoize[x] = value
+            value
+        };
+
+    # Create and seed the memoization table
+    # Note: doesn't use the default (sorted) dictionary
+    # Because integers can't be used as keys. They're
+    # for indexing linear elements in order.
+    memoize = [<hashtable>].new()
+    memoize[1] = 1i;
+    memoize[2] = 2i;
+    memoize[3] = 6i;
+
+    # Create a bound lambda that encloses the memoization table.
+    {x -> v = fact(x); memoize[x] = v; v}.Bind()
+
+}() # Immediately-invoked function expression
+
+Alert 'Starting getFact loop'
+
+foreach (n in getrandom(100)) {
+    getfact(n) |> println
+}
+

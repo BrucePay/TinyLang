@@ -1,0 +1,175 @@
+####################################################################
+#
+# Small example script showing Tiny working with trees and methods
+# in dictionaries.
+#
+####################################################################
+
+import 'utils'
+import 'math'
+
+# A function that returns a dictionary from an operator to
+# its implementation
+fn opMap -> {
+        "+" : {x, y -> x + y }
+        "-" : {x, y -> x - y }
+        "*" : {x, y -> x * y }
+        "/" : {x, y -> x / y }
+        "%" : {x, y -> x % y }
+    }
+
+info("Function that constructs a tree node")
+
+# Construct a binary tree node. This function adds
+# methods to the hashtable
+fn tree val, left, right ->  {
+        # The value of this node
+        val    :  val
+
+        # The left subtree
+        left   :  left
+
+        # The right subtree
+        right  :  right
+
+        # Method to print the tree using indentation to reflect depth.
+        PrintTree  : { offset ->
+            offset ?= 0
+
+            match this.left
+            | [<IDictionary>] -> this.left.PrintTree(offset+2)
+            | -> println(" " * (offset+2) + this.left)
+
+            match this.right
+            | [<IDictionary>] -> this.right.PrintTree(offset+2)
+            | -> println(" " * (offset+2) + this.right)
+
+            println(" " * offset + this.Val)
+        }
+
+        # method to recursively evaluate a tree
+        Eval : {
+           v1 = match this.left
+               | [<IDictionary>] -> this.left.eval()
+               | -> AsNumber(this.left)
+
+            v2 = match this.right
+                | [<IDictionary>] -> this.right.eval()
+                | -> AsNumber(this.right)
+
+             opMap()[this.val].invoke([v1, v2])
+         }
+
+        # Method to compute the depth of this tree
+        Depth : {
+            ld = match this.left
+                 | [<IDIctionary>] -> this.Left.Depth()
+                 | null -> 0
+                 | -> 1
+            
+            rd = match this.right
+                 | [<IDIctionary>] -> this.right.Depth()
+                 | null -> 0
+                 | -> 1
+            
+            1 + utils.max(ld, rd)
+        }
+    }
+
+# Create a tree using the constructor function which
+# adds methods to the nodes
+testtree1 = tree('+',
+                tree('*',
+                    tree('-', 10, 2), 
+                    3
+                ),
+                tree('/',
+                    4,
+                    tree('%',
+                        5 ,
+                        tree('+',
+                            tree('*',
+                                2,
+                                3
+                            ),
+                            14
+                        )
+                    )
+                )
+            )
+
+# Create a tree directly using object literal notation
+testtree2 = {
+        val   : '+'
+        left  : {
+            val  : '*'
+            left : {
+                val  : '-'
+                left : 10
+                right: 2
+            }
+            right: 3
+        }
+        right: {
+            val  : '/'
+            left : {
+                val: '+'
+                left: 10
+                right: 5
+            }
+            right: {
+                val  : '%'
+                left : 5
+                right: 6
+            }
+        }
+    }
+
+
+undef printTree
+def printTree {:: left right val ::} depth {
+    printTree(left,  depth+2)
+    printTree(right, depth+2)
+    
+    println("{0}{1}", ' ' * depth, val)
+}
+
+def printTree value depth {
+    println("{0}{1}", ' ' * depth, value)
+}
+
+def printTree treeToPrint -> printTree(treeToPrint, 0)
+ 
+# A function set to evaluate the tree; uses pattern-valued parameters
+undef TreeEval
+def TreeEval {:: left right val:'+' ::} -> TreeEval(left) + TreeEval(right)
+def TreeEval {:: left right val:'-' ::} -> TreeEval(left) - TreeEval(right)
+def TreeEval {:: left right val:'*' ::} -> TreeEval(left) * TreeEval(right)
+def TreeEval {:: left right val:'/' ::} -> TreeEval(left) / TreeEval(right)
+def TreeEval {:: left right val:'%' ::} -> TreeEval(left) % TreeEval(right)
+def TreeEval treeToEval -> treeToEval # bugbug as [<double>]
+
+info('Print the tree using the printtree() function:')
+printtree(testtree1)
+
+info('Print the tree using the printtree() method:')
+testtree1.PrintTree()
+
+info('Evaluating tree using function results in: {0}', treeeval(testtree1))
+
+info('Evaluating tree using method results in: {0} ', testtree1.Eval())
+
+info('Print tree2 using the printtree() function:')
+printtree(testtree2)
+info('Evaluating tree2: {0}', treeeval(testtree2))
+
+# Function set to compute the depth of a tree.
+undef depth
+def depth {:: left right val ::} -> 1 + math.max(depth(left), depth(right))
+def depth _ -> 1
+
+info("Depth of tree using depth method is {0}",    testtree1.depth())
+info("Depth of tree using depth function is {0}",  depth(testtree1))
+info("Depth of tree2 using depth function is {0}", depth(testtree2))
+
+

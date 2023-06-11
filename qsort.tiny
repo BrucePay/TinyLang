@@ -1,0 +1,32 @@
+###################################################################################
+#
+# Function set to implement a "quick sort" in Tiny
+#
+# Haskell version:
+#
+#    quicksort :: Ord a => [a] -> [a]
+#    quicksort []     = []
+#    quicksort (p:xs) = (quicksort lesser) ++ [p] ++ (quicksort greater)
+#        where
+#            lesser  = filter (< p) xs
+#            greater = filter (>= p) xs
+#
+# Tiny version:
+#
+###################################################################################
+
+undef qsort
+
+def qsort [] f      -> []
+def qsort p::xs f   -> qsort(xs.where{f(it, p)}, f) + p + qsort(xs.where{!(f(it, p))}, f)
+def qsort list      -> qsort(list, {x,y -> x < y})
+
+#
+# try it out
+#
+data = getrandom(20)
+
+println("Ascending sort: ${qsort(data).ToString()}")
+
+println("Descending sort: " + qsort(data, {x, y -> x > y}).ToString())
+

@@ -1,0 +1,85 @@
+########################################################
+#
+# A Tiny script that implements the merge sort algorithm
+#
+#######################################################
+
+# Number of items to sort from arguments or default
+itemsToSort = head(args) ?? 25
+
+#
+# Function to merge two sorted lists
+#
+fn merge l1 l2 {
+    result = []
+    while (l1.count && l2.count) {
+        if (l1[0] > l2[0]) {
+            result += l2.Pop()
+        }
+        else {
+            result += l1.Pop()
+        }
+    }
+
+    # Pop any remaining items in l1
+    while (l1.count > 0) {
+        result += l1.Pop()
+    }
+
+    # Pop any remaining items in l2
+    while (l2.count > 0) {
+        result += l2.Pop()
+    }
+
+    result
+}
+
+println("Test merge() first")
+merge([1,3,5], [2,4,6,7,8]) |> println()
+
+############################################
+#
+# Function to merge-sort a list
+#
+fn mergesort list {
+    # split the list into single-item lists
+    listOfLists = list / 1
+    # repeat the merges until there is only one item left
+    while (listOfLists.Count > 1) {
+        nl = []
+        # pull two lists from the list and merge them
+        # repeat until all lists are merged
+        while (listOfLists.count > 0) {
+            l1 = listOfLists.Pop()
+            l2 = listOfLists.Pop()
+            if (l2 && l1) {
+                nl.Add(merge(l1, l2))
+            }
+            elseif (l1) {
+                nl.Add(l1)
+            }
+            elseif (l2) {
+                nl.Add(l2)
+            }
+        }
+        listOfLists = nl
+    }
+    listOfLists[0]
+}
+
+println("Test the merge-sort function with {0} items to sort.", itemsToSort)
+items = itemsToSort |> getRandom()
+time {
+    __parent.sorted = items |> mergesort()
+}
+println (sorted.ToString())
+println("Verifying the sort")
+if (sorted == items.sort()) {
+    println("Results verified")
+}
+else {
+    error("Results were not the same!!!")
+}
+
+
+

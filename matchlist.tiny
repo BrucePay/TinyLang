@@ -1,0 +1,51 @@
+######################################################
+#
+# Pattern matching using patterns as objects and the
+# .matchlist() method
+#
+#######################################################
+
+# A database of people and relationships
+rels = [
+    ['parent-of', 'Bob',    'Sue'],
+    ['gender',    'Bob',    'Male'],
+    ['parent-of', 'Bob',    'John'],
+    ['gender',    'John',   'Male'],
+    ['parent-of', 'Sue',    'Bill'],
+    ['gender',    'Sue',    'FeMale'],
+    ['gender',    'Bill',   'Male'],
+    ['parent-of', 'Sue',    'Mary'],
+    ['gender',    'Alice',  'FeMale'],
+    ['gender',    'Mary',   'FeMale'],
+    ['parent-of', 'John',   'george'],
+    ['gender',    'George', 'Male'],
+    ['parent-of', 'John',   'Alice'],
+    ['parent',    'Male',   'Father'],
+    ['parent',    'FeMale', 'Mother']
+]
+
+# Function to find the gender of a person
+fn genderOf person ->
+    ('gender' :: {it == person} :: gender :: _)
+    .matchlist(rels, { gender })
+    .first()
+
+# Function to find a person's parents
+fn parentsOf person ->
+    ('parent-of' :: {it == person} :: parent :: _)
+    .matchlist(rels, { parent })
+
+# Function to find a person's grandparents
+fn grandParentsOf person ->
+    parentsOf( person )
+    .flatmap{ parentsOf(it) }
+
+# Function to find a person't grandfather
+fn grandFathersOf person ->
+    grandParentsOf( person )
+    .where{ genderOf(it) == 'Male' }
+ 
+println("Bob's grandparents are " + grandParentsOf('Bob'))
+println("Bob's grandfathers are " + grandFathersOf('Bob'))
+ 
+

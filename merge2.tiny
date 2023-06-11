@@ -1,0 +1,91 @@
+########################################################################
+#
+# Haskell 'merge' function from merge sort
+#
+#   merge [] xs = xs
+#   merge xs [] = xs
+#   merge (x:xs) (y:ys) | y < x     = y : merge (x:xs) ys
+#                       | otherwise = x : merge xs (y:ys)
+#
+# Tiny version along the same lines:
+#
+########################################################################
+
+def merge [] xs -> xs
+def merge xs [] -> xs
+def merge x::xs y::ys -> if (x > y) {y :+ merge(x :+ xs, ys)}
+                         else       {x :+ merge(xs, y :+ ys)}
+
+fn merge_a x::xs y::ys ->
+    match _
+    | {y == _} -> x :+ xs
+    | {x == _} -> y :+ ys 
+    | {x > y}  -> y :+ merge_a(x :+ xs, ys)
+    |          -> x :+ merge_a(xs, y :+ ys)
+
+fn merge_b args ->
+    match args
+    | xs::[] -> xs
+    | []::xs -> xs
+    | [x::xs]::[y::ys]::_ ->  if (x > y) {y :+ merge_b(x :+ xs, ys)}
+                              else       {x :+ merge_b(xs, y :+ ys)}
+
+#
+# Let's try it out
+#
+left    = getrandom(15) |> sort
+right   = getrandom(20) |> sort
+println("Merge left:\n {0}\nand right:\n {1}", left, right)
+
+time {
+    __parent.out_a = merge_a(left, right).ToString()
+    println("Merge_a Result:\n {0}", out_a)
+}
+
+time {
+    __parent.out_b = merge_b(left, right).ToString()
+    println("Merge_b Result:\n {0}", out_b)
+}
+
+time {
+    __parent.out_c = merge(left, right).ToString()
+    println("Merge_c Result:\n {0}", out_c)
+}
+
+println("Are they the same? {0}", out_a == out_b && out_b == out_c)
+
+println("Now a zip function:");
+fn mzip x::xs y::ys -> x && y then [[x, y]] + mzip(xs, ys)
+
+println("Zipped {0}", mzip([1..5], [6..10]))
+
+println("A map implementation")
+
+def mmap [] _ -> []
+def mmap x::xs f -> f(x) :+ mmap(xs, f)
+
+time { [1..10] |> mmap {n -> n*n} |> println }
+
+println('A qsort implementation')
+
+def qsort [] -> []
+def qsort p::l -> l.split{it < p} ~ s::b::_ then qsort(s) + p + qsort(b)
+
+# Fix extra args binding
+
+time {
+    50 |> getrandom |> qsort |> asstring |> println
+}
+
+
+println("Towers of Hanoi, Haskell-style")
+def move 0 from to temp -> []
+def move n from to temp -> move(n-1, from, temp, to)
+                           + [from + " -> " + to]
+                           + move(n-1, temp, to, from)
+
+time {
+    move(4, "Tower1", "Tower2", "Tower3") |> printlist
+}
+
+

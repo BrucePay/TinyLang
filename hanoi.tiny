@@ -1,0 +1,40 @@
+###############################################
+#
+# Towers of Hanoi
+#
+###############################################
+
+numDisks = head(args) ?? 5
+
+__global.MoveCount = 0;
+fn dohanoi n, to, from, using ->
+    if (n > 0) {
+        n -= 1;
+        dohanoi(n, using, from, to);
+        println("move " + from + " ==> " + to);
+        __global.MoveCount += 1
+        dohanoi(n, to, using, from);
+    }
+
+println("Doing tower of hanoi with {0} disks:", numDisks); 
+dohanoi(numdisks, 3, 1, 2);
+println('Total moves: {0}', __global.MoveCount)
+__global.Remove('MoveCount')
+
+#
+# Do it using a tower object
+fn tower n -> {
+    one:   n
+    two:   0
+    three: 0
+    move:  {from to -> this.(from) -= 1; this.(two) += 1}
+}
+
+fn doHanoi tower, to, from, using ->
+    if (tower.one > 0 || tower.two > 0) {
+        tower.move("one", "three")
+        tower.move("one", "two")
+        tower.move("three", "two")
+    }
+}
+ 

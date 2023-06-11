@@ -1,0 +1,49 @@
+###############################################################
+#
+# Tiny utility script to fix indentation rounding to the
+# nearest 4 spaces.
+#
+###############################################################
+import 'utils'
+import 'IO'
+
+options = Utils.GetOpts('fixindent', args, {
+        filename: null
+        output: null
+    })
+
+if (not(options.filename)) {
+    error "FixIndent: you must provide the 'filename' option naming the file to process."
+    error ("    Available options: " + keys(options)) 
+    return null
+}
+
+options.filename  |> IO.testpath |> not then {
+    error("FixIndent: the specified file '{0}' does not exist.", options.filename)
+    return null
+} 
+
+outfile = options.output ?? options.filename + '.new'
+
+alert("Processing input file '{0}' to output file '{1}'", options.filename, outfile)
+time {
+options.filename
+    |> IO.readalllines
+    |> map {
+        line = it
+        line ~ r/^(\s*)/ then {
+            len = matches[1] |> length
+            if (len % 4 == 0) {
+                line
+            }
+            else {
+                " " * (len + 4 - len % 4) + (line -~ r/^\s*/)
+            }
+        } 
+    }
+    |> writefile(outfile, [<System.Text.Encoding>].ASCII)
+    return null
+}
+
+
+

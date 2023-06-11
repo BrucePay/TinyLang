@@ -1,0 +1,66 @@
+####################################################################
+#
+# Code automatically loaded when tiny is started.
+#
+####################################################################
+
+#
+# Launch the tiny editor on a file.
+#
+fn TEdit filename -> run('editor', filename);
+
+#
+# Copy the contents of the file to the screen
+fn cat fileToCat -> readfile(fileToCat) |> printlist;
+
+# Utility to print out files, multiple per line
+fn wls pattern='*.tiny'  perRow=4 width=25 -> 
+                    ((ls(pattern)*.name) / perRow)
+                    |> foreach {
+                        it.foreach { print( it.PadRight(width) ) };
+                        println()
+                    };
+
+edit = GetCommand 'gvim';
+gvim = GetCommand 'gvim';
+
+#
+# Utility to find a type amongst the loaded types.
+#
+fn FindType pattern -> 
+                    [<appdomain>]
+                        .currentDomain
+                            .getassemblies()
+                                *.gettypes()
+                                    .flatten()
+                                        .aslist()
+                                            *.fullname
+                                                .matchall(pattern);
+
+#
+# This code works but it's much slower than calling
+# Select-String
+#
+#fn grep pattern files = "*.tiny" {
+#    ls(files)
+#    |> readfile(pattern) {
+#        println( "{0}:{1} {2}",
+#            filename.path, it2, it)
+#    }
+#}
+#>
+
+SelectString  = GetCommand 'Select-String'
+fn Grep pattern, file = '*.tiny' { 
+    selectString(pattern, file)
+}
+
+
+#
+# A 'ternary operator' for Tiny
+fn ifElse val lambda1 -> if (val) {lambda1()} else {body()}
+
+#
+# List all of the tiny files
+fn ltf -> [<tinylist>].Partition(ls("*.tiny").map{it.name}, 7).map{it |> map{format("{0,25}", it)} |> join()}
+fn sls -> (ls("*.tiny").map{it.name} / 7) |> map { it.map{ format("{0,25}", it) } |> join("") |> println }

@@ -1,0 +1,88 @@
+#################################################################
+#
+# Test printing out a tree of values
+#
+#################################################################
+
+import utils
+
+testStr1 = '{
+    a: 1
+    b: {
+        c: {
+            x: 10
+            y: 15
+        }
+        d: 3
+    }
+    e: {
+        f: [
+            1,
+            [
+                2,
+                3,
+                [
+                    4,
+                    5
+                ],
+                6
+            ],
+            7,
+            8,
+            9,
+            {
+                Q: 1
+                R: 2
+                S: 3
+                T: 4
+            },
+            27
+        ]
+    }
+    g: 5
+}
+'
+
+testStr2 = '{
+    a: 1
+    b: 2
+    c: [
+        1,
+        2,
+        3,
+        4,
+        5
+    ]
+    d: {
+        x: [
+            1,
+            {
+                a: 1
+                b: 2
+            },
+            3
+        ]
+        y: 4
+        z: [
+            1,
+            {
+                p: 1
+                q: 2
+                r: 3
+                s: 3.14
+            },
+            3,
+            4
+        ]
+    }
+}
+'
+
+alert("Trying test string 1")
+result1 = testStr1 |> eval |> utils.PrintTree == testStr1
+alert("result 1 was $result1")
+alert("Trying test string 2")
+result2 = testStr2 |> eval |> utils.PrintTree  == testStr2
+alert("result 2  was $result2")
+
+

@@ -1,0 +1,16 @@
+###################################################################
+#
+# Script to download the main web page at microsoft.com and
+# find the functions defined in the page
+#
+###################################################################
+
+import 'web'
+
+url = head(args) ?? 'http://microsoft.com'
+
+matchlist (web.iwr(url) /~ "\n")
+| {it /~ '[^a-z]+' ~ (_::'function'::name::_) && name} -> name
+| -> null
+
+

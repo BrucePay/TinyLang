@@ -1,0 +1,91 @@
+############################################################
+#
+# An example of a DSC-like (Puppet-like) DSL written in Tiny
+#
+############################################################
+
+import 'DataUtils'
+
+#
+# Example using the DSL
+#
+
+# Create a configuration named 'FirstConfiguration'.
+configuration 'FirstConfiguration'
+{
+    # Configuration metadata
+    {
+        author: "bob"
+        date  : getdate()
+    }
+
+    # An optional file resource
+    if (args) {
+        file 'file1' {
+            path    : "foo/bar.txt"
+            content : "some content"
+        }
+    }
+
+    # A registry resource
+    registry 'registry1'
+    {
+        path : "foo/bar"
+        key  : "zork"
+        value : if (getdate().Day % 2 == 0)
+                    { "even" }
+                else
+                    { "odd" }
+    }
+
+    # Another file resource
+    file 'file2'
+    {
+        path    : "foo/buz.txt"
+        content : "some other content"
+    }
+}
+
+###########################################################
+#
+# Implementation of the DSL. 'keywords' correspond to
+# simple functions.
+#
+
+# A function used to contain the entire configuration.
+# Returns the complete configuration as a JSON string.
+fn configuration [<string>] name {
+    if ((body is [<TinyLambda>]) |> not) {
+        throw "configuration: argument 'lambda' was null"
+    }
+
+    # Set the name in the configuration
+    complete = {configurationName: name};
+
+    # individually evaluate each statement in the body
+    foreach (val in body.DotReturnAll()) {
+        if (val is [<IDictionary>]) {
+            complete += val
+        }
+    }
+
+    # Turn the result into a JSON object
+    DataUtils.ToJson( complete )
+}
+
+# Mocking the file resource
+fn file id {
+    if (body == null || not (body is [<IDictionary>])) {
+        throw 'file: body must be a dictionary'
+    }
+    newhash("resource:file:" + id, body)
+}
+
+# Mocking the registry resource
+fn registry id {
+    if (body == null || not (body is [<IDictionary>])) {
+        throw 'registry: body must be a dictionary'
+    }
+    newhash("resource:registry:" + id, body)
+}
+

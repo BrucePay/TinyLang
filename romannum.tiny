@@ -1,0 +1,121 @@
+###################################################################################
+#
+# A script that defines a function for converting Roman numbers 
+# into decimal numbers and vice versa.
+#
+###################################################################################
+
+#
+# A map between Roman digits and their decimal values.
+#
+digitMap = {
+    "m"  : 1000
+    "cm" : 900
+    "d"  : 500
+    "cd" : 400
+    "c"  : 100
+    "xc" : 90
+    "l"  : 50
+    "xl" : 40 
+    "x"  : 10
+    "ix" : 9
+    "v"  : 5
+    "iv" : 4
+    "i"  : 1
+}
+
+# sort the Roman 'digits' such that the longest strings are first
+digits = digitMap |> keys |> sortdescending {it.length}
+
+#
+# routine to parse roman numerals
+#
+fn ConvertRomanToDecimal [<string>] str {
+    result = 0
+    while (str) {
+        # find the next matching value
+        didntMatch = true
+        digits.foreach {
+            digitLen = it.Length
+            if (digitLen <= str.Length) {
+                # Item length was less than the string length so proceed
+                if (it == str.substring(0, digitLen)) {
+                    # it's a match so emit the numeric value
+                    result += digitMap[it]
+                    str = str.substring( it.Length )
+                    didntMatch = false
+                    break
+                }
+            }
+        }
+
+        # if no digit matched, break out of the while loop
+        if (didntMatch) {
+            break
+        }
+    }
+
+    if (didntMatch) {
+        # if there was a failed match, drop the list and return -1
+        result = -1
+    }
+
+    result
+}
+
+fn ConvertDecimalToRoman number {
+    result = ''
+    digits = digitMap |> sortdescending { it.value } |> map { it.key }
+    while (number) {
+        foreach (digit in digits) {
+            if (number - digitMap[digit] >= 0) {
+                result += digit
+                number -= digitMap[digit]
+                break
+            }
+        }
+    }
+    result
+}
+
+testdata = [ 
+    'mcmxli',      # 1941
+    'mcmxlii',     # 1942
+    'mcmxliii',    # 1943
+    'mmxiv' ,      # 2014
+    'MCMLIV',      # 1954
+    'mcmiii0il',   # - error
+    'MCMXC'        # 1990
+]
+
+testdata |> foreach {
+    if ((result = ConvertRomanToDecimal(it)) == -1) {
+        result = "ERROR"
+    }
+    println("Roman number {0,10} is equal to {1} decimal", it, result)
+};
+
+println();
+
+[1941, 1942, 1954, 1990] |> foreach {
+    result = ConvertDecimalToRoman(it)
+    println("Decimal number {0,10} is equal to Roman Number {1}.", it, result)
+}
+
+println()
+
+#
+# Now try round-tripping a set of random numbers
+#
+println("Testing roundtripping numbers")
+time {
+    GetRandom(10, 1, 2050) |> foreach {
+        result = it |> ConvertDecimalToRoman |> ConvertRomanToDecimal
+        if (result != it) {
+            println("Converting $it to ${ it |> ConvertDecimalToRoman } failed to round-trip.")
+        }
+    }
+}
+println("Testing complete")
+
+

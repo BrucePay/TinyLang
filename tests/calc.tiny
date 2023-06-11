@@ -1,0 +1,171 @@
+#################################################
+#
+# Example Tiny script that parses and evaluates
+# arithmetic expressions. This script is used
+# by Scenario.tests.tiny
+#
+#################################################
+
+import 'IO'
+import 'utils'
+
+__calc_options = Utils.GetOpts('calc', args, {  
+        expression:  ''
+        norepl:      false
+        returnTree:  true
+    })
+
+
+# Regular expression for the calculator 'language' tokens
+expression_pattern = [
+                        '[0-9]+(\.[0-9]+){0,1}', # Numbers
+                        '\*\*',                  # exponentiation operator
+                        '[+*/%()-]',             # arithmetic operators
+                        '\s+'                    # spaces
+                    ]
+                    .join('|')
+
+#----------------------------------------------
+#
+# Create a token stream from a string
+#
+fn Tokenize str {
+
+    # Split the string into tokens with the 'matches' operator
+    tokens = (str *~ expression_pattern)
+        .map{it.value}
+        .where{it !~ '\s+'};
+
+    # return a token stream object
+    {
+        tokens : tokens
+        index  : 0
+
+        # method to return the next token
+        next   : {
+            result = null;
+            if (this.index < this.tokens.Count) {
+                result = this.tokens[this.index];
+                this.index += 1;
+            }
+            result
+        }
+    }
+}
+
+# Function to return the precedence of an operator
+fn prec op ->
+    match op
+    | '+'  -> 2
+    | '-'  -> 2
+    | '*'  -> 3
+    | '/'  -> 3
+    | '%'  -> 3
+    | '**' -> 4
+    | -> throw "prec: invalid operator: " + op
+
+#----------------------------------------------
+#
+# Parse a stream of numbers and operators into an executable
+# expression that looks like:
+#    ['+', 2, ['*', 4, 5]]
+#
+fn ParseExpr stream {
+
+    # the value and operator stacks; just plain old lists
+    # since TinyLists have .push() and .pop() methods
+    valstk = []
+    opstk  = []
+
+    # parse the tokens into an executable expression
+    while ((token = stream.next()) != null) {
+        match token
+        | (token as [<double>]) -> valstk.push(token as [<double>])
+        | '(' -> valstk.Push(ParseExpr(stream))
+        | ')' -> break
+        | -> {
+            while (opstk.count && prec(opstk[0]) >= prec(token)) {
+                v2 = valstk.pop()
+                v1 = valstk.pop()
+                op = opstk.pop()
+                valstk.push([op, v1, v2])
+            }
+            opstk.push(token)
+        }
+    }
+    
+    # drain the stacks
+    while (opstk.Count) {
+        v2 = valstk.pop()
+        v1 = valstk.pop()
+        op = opstk.pop()
+        valstk.push([op, v1, v2])
+    }
+
+    # and return the resulting expression
+    if (valstk.Count) {
+        valstk[0]
+    }
+}
+
+#----------------------------------------------
+#
+# Function to recursively evaluate a parsed expression
+# using pattern matching.
+# Example input: ["+" 2 ["*" 3 4]]
+#
+fn EvalExpr expr ->
+    match expr
+    | '+'  :: v1 :: v2 :: _ -> EvalExpr(v1) +  EvalExpr(v2)
+    | '-'  :: v1 :: v2 :: _ -> EvalExpr(v1) -  EvalExpr(v2)
+    | '*'  :: v1 :: v2 :: _ -> EvalExpr(v1) *  EvalExpr(v2)
+    | '/'  :: v1 :: v2 :: _ -> EvalExpr(v1) /  EvalExpr(v2)
+    | '%'  :: v1 :: v2 :: _ -> EvalExpr(v1) %  EvalExpr(v2)
+    | '**' :: v1 :: v2 :: _ -> EvalExpr(v1) ** EvalExpr(v2)
+    | -> expr
+
+#----------------------------------------------
+#
+# The calculator repl...
+#
+
+if (__calc_options.Expression) {
+    parsedExpr = __calc_options.Expression |> Tokenize |> ParseExpr;
+    result = EvalExpr(parsedExpr)
+    if (__calc_options.ReturnTree) {
+        return [ parsedExpr.ToString(), result ]
+    }
+    else {
+        return result
+    }
+}
+
+if (__calc_options.NoRepl == false) {
+    cls()
+    while (true) {
+        exprtext = readline("Enter expression (q to quit): ")
+        if (exprText == "q") {
+            break
+        }
+
+        try {
+            parsedexpr = exprText |> Tokenize |> ParseExpr;
+            println("Parsed expr: " + parsedExpr)
+            result = EvalExpr(parsedExpr)
+            println("Result: " + result)
+            # division by 0 with doubles doesn't throw
+            if (result != [<double>].positiveinfinity) {
+                native = eval(exprText)
+                if (native != result) {
+                    error("Results don't match; got:'"
+                    + result + "' expected:'" + native + "'")
+                }
+            }
+        }
+        catch {
+            error(it.ToString())
+        }
+    }
+}
+
+

@@ -1,0 +1,99 @@
+##############################################################
+#
+# Tiny script to draw the Mandelbrot set on the console.
+# Translated from the PowerShell original.
+#
+##############################################################
+
+import 'console'
+
+screenY = 20.0
+screenX = 50.0
+
+minReal = -2.0
+maxReal = 1.0
+minImaginary = -1.2
+MaxImaginary = 1.2 
+
+realFactor = ( maxReal - minReal ) / ( screenX - 1.0 )
+imaginaryFactor = ( MaxImaginary - minImaginary ) / ( screenY - 1.0 )
+
+cImaginary = 0.0
+cReal = 0.0
+
+zReal = 0.0
+zImaginary = 0.0
+
+zRealSq = 0.0
+zImaginarySq = 0.0
+
+interCount = 0
+xOrd = 0
+yOrd = 0
+bailout = 16
+
+color_map = [
+        "Blue", "DarkBlue", "Green", "DarkGreen", "Cyan",
+        "DarkCyan", "Yellow", "DarkYellow", "Gray", "DarkGray",
+        "Magenta", "DarkMagenta", "Red", "DarkRed", "White"
+    ]
+
+lastcolor = ""
+color = color_map[0]
+
+oldBackgroundColor = console.GetBackgroundColor()
+oldForegroundColor = console.GetForegroundColor()
+
+
+try {
+    # Console.SetWindowSize( screenX, screenY + 2 )
+    Console.SetBackgroundColor('Black')
+    Console.Clear()
+
+    while (yOrd < screenY/2) {
+        cImaginary = MaxImaginary - yOrd * imaginaryFactor
+        
+        xOrd = 0
+        while (xOrd < screenX) {
+            cReal = minReal + xOrd * realFactor
+    
+            zReal = cReal
+            zImaginary = cImaginary
+            
+            interCount = 0
+            while (interCount < bailout) {
+                zRealSq = zReal * zReal
+                zImaginarySq = zImaginary * zImaginary;
+                
+                if (zRealSq + zImaginarySq > 4 ) {
+                    break
+                }
+                
+                zImaginary = 2.0 * zReal * zImaginary + cImaginary
+                zReal = zRealSq - zImaginarySq + cReal
+                interCount += 1
+            }
+            
+            if ( interCount < bailout ) {
+                color = color_map[interCount % 15]
+            
+                if ( lastcolor != color ) {
+                    Console.SetBackgroundColor(color)
+                }
+                lastcolor = color
+                
+                Console.PrintAt( xOrd, yOrd, ' ')
+                
+                Console.PrintAt( xOrd, screenY - yOrd - 1, ' ')
+            }
+            xOrd += 1
+        }
+        yOrd += 1
+    }
+}
+finally {
+    Console.SetBackgroundColor( oldBackgroundColor )
+    Console.SetForegroundColor( oldForegroundColor )
+    Console.SetCursor(0 , screenY + 1)
+}
+

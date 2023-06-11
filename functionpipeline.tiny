@@ -1,0 +1,50 @@
+########################################################################
+#
+# Test using the function pipe operator '|>' to
+# find the most common words in a file, uppercase them and then
+# display the word and its count
+#
+########################################################################
+
+println("Processing with function composition:")
+fileToProcess = 'Tiny Documentation.html'
+time {
+    readtext(fileToProcess)
+    |> split r/\s+/
+    |> matchall r/^[a-z]+$/
+    |> tohash()
+    |> sortdescending{it.value}
+    |> first(10)
+    |> foreach {
+        word = it.Key
+        word = head(it.Key).ToUpper() + tail(word)
+        println( word.padleft(20) + " : " + it.Value )
+    }
+}
+
+#
+# Do the same thing again with method chaining. This
+# is not quite equvalent to the function chaining example
+# because we need to turn other data structures into TinyLists
+# so we can continue using methods.
+# 
+println("Processing with method chaining:")
+
+time {
+    readtext(fileToProcess)
+    .aslist()
+    .split(r/\s+/)
+    .matchall(r/^[a-z]+$/)
+    .tohash()
+    .getenumerator()
+    .aslist()
+    .sortdescending{it.value}
+    .take(10)
+    .foreach {
+        word = it.Key
+        word = head(word).ToUpper() + tail(word)
+        println( word.padleft(20) + " : " + it.Value )
+    }
+}
+
+

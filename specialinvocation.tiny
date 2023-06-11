@@ -1,0 +1,30 @@
+#################################################################
+#
+# Test the "special invocation" forms in tiny. This allows invocation
+# with a string or dictionary after the function name.
+#
+#################################################################
+fn doit name {
+    bodyval = if (body is [<TinyLambda>]) {
+                body.Invoke()
+              }
+              else {
+                body
+              }
+    println { name: bodyval }
+}
+
+println 'Testing special invocation with a lambda'
+doit 'Name' {
+    [1, 2, 3, 4, 5]
+}
+
+println 'Testing special invocation with an object literal'
+doit('AnotherName') {
+    one:   1
+    two:   2
+    three: 3
+}
+
+
+

@@ -1,0 +1,186 @@
+#################################################################
+#
+# Examples of searching and sorting algorithms in Tiny
+#
+#################################################################
+
+alert 'Merge ***********************************************************'
+#
+# The merge function in a merge sort.
+#
+
+fn merge l1 l2 {
+    result = []
+    while (l1 && l2) {
+        x = l1.pop()
+        y = l2.pop()
+        if (x < y) {
+            result.Add(x)
+            l2.push(y)
+        }
+        else {
+            result.Add(y)
+            l1.push(x)
+        }
+    }
+
+    while (l2) {
+        result.Add(l2.pop())
+    }
+
+    while (l1) {
+        result.Add(l1.pop())
+    }
+
+    return result
+}
+
+merge([1,2,4,7], [3,5,6,8,9,10]) |> println
+
+
+alert 'Functional Merge ***********************************************************'
+#
+# The merge function in a merge sort, functional-style
+#
+undef merge2
+def merge2 [] x -> x;
+def merge2 x [] -> x;
+def merge2 x::xs y::ys -> if (x < y) { x :+ merge2( xs, y :+ ys )}
+                          else { y :+ merge2( x :+ xs, ys )};
+
+merge2([1,2,4,7], [3,5,6,8,9,10]) |> println
+
+alert 'Binsrch ***********************************************************'
+#
+# Binary search of an array; imperative style
+#
+
+fn binsrch list t {
+    # Null array case
+    if (! list) {return -1}
+
+    # array of 1 element
+    if (list.count == 1) { 
+        if (list[0] == t) {
+            return 0
+        }
+        else {
+            return -1 }
+    }
+
+    # Set the inital upper and lower bounds
+    hi = list.count
+    low = 0
+    # and the midpoint
+    c = [<math>].ceiling((hi-low) / 2) + low
+    lastc = null
+
+    # Loop until upper and lower converge
+    while (lastc != c) {
+        if (list[c] == t) {
+            return c
+        }
+
+        lastc = c
+        if (list[c] < t) {
+            low = c
+            c = [<math>].round((hi-low) / 2) + low
+        }
+        else {
+            hi = c
+            c = [<math>].round((hi-low) / 2) + low
+        }
+    }
+    return -1
+}
+
+# Test it out
+[1..10] |> map { binsrch([1..10], it) } |> println
+
+
+alert 'Functional Binsrch ***********************************************************'
+#
+# Binary search of an array, functional-style...
+#
+undef binsrch2
+
+def binsrch2 []    t -> -1
+def binsrch2 x::[] t -> if (t == x) {0} else {-1}
+def binsrch2 list  t -> binsrch2(list, t, 0, list.Count, null)
+def binsrch2 list t low hi lc ->
+    match (c = [<math>].round((hi-low) / 2) + low)
+    | {list[c] == t}    -> c
+    | {c == lc}         -> -1; 
+    | {list[c] > t}     -> binsrch2(list, t, low, c,  c);
+    |                   -> binsrch2(list, t, c,   hi, c);
+
+
+# Test it out
+[1..10] |> map { [1..10] |> binsrch2(it)} |> println
+
+
+alert 'Insertion Sort ***********************************************************'
+#
+# Insertion sort implementation, adapted from the corresponding Wikipedia entry.
+#
+fn InsertionSort A {
+    i = 1
+    len = getlength(A)
+    while (i < len) {
+        x = A[i]
+        j = i - 1
+        while (j >= 0 && A[j] > x) {
+            A[j+1] = A[j]
+            j = j - 1
+        }
+        A[j+1] = x
+        i = i + 1
+    }
+    return A
+}
+
+InsertionSort(getrandom(15)) |> println
+
+
+alert 'Shell Sort ***********************************************************'
+#
+# ShellSort - taken almost literally from the pseudocode included in
+# the Wikipedia entry on ShellSort.
+#
+fn shellsort list {
+    # Sort an array a[0...n-1].
+    gaps = [701, 301, 132, 57, 23, 10, 4, 1]
+    n = list.count
+    
+    # Start with the largest gap and work down to a gap of 1
+    foreach (gap in gaps) {
+        # Skip gaps that are too large.
+        if (gap >= n) {
+            continue
+        }
+
+        # Do a gapped insertion sort for this gap size.
+        # The first gap elements a[0..gap-1] are already in gapped order
+        # keep adding one more element until the entire array is gap sorted
+        i = gap
+        while (i < n) {
+            # add a[i] to the elements that have been gap sorted
+            # save a[i] in temp and make a hole at position i
+            temp = list[i]
+
+            # shift earlier gap-sorted elements up until the correct location for a[i] is found
+            j=i
+            while (j >= gap && list[j - gap] > temp) {
+                list[j] = list[j - gap]
+                j -= gap
+            }
+
+            # put temp (the original a[i]) in its correct location
+            list[j] = temp
+            i += 1
+        }
+    }
+    list
+}
+
+getrandom(15) |> shellsort |> println

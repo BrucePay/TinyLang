@@ -1,0 +1,80 @@
+#
+# Test nested patterns and destructuring of lists with
+# patterns.
+#
+
+import 'utils'
+import 'IO'
+import 'math'
+import 'tinytestutils'
+
+suite 'DestructuringArrayTests' {
+
+    test 'ThreeLevelsDeep' {
+        test: {
+            # Matching lists 3 levels deep
+            [1,[20,[300]]] ~ a::[b::[c::_]::_]::_ then
+                format("a={0} b={1} c={2}", a, b, c)
+        }
+        Expected: 'a=1 b=20 c=300'
+    } 
+
+    test 'MultilevelMatchListTest' {
+        test: {
+            data = [
+                [1, [2, 3], 4],
+                [2, [3, 3], 4],
+                [3, [4, 3], 4],
+                [4, [5, 3], 5],
+                [5, [6, 3], 5],
+                [6, [7, 3], 5]
+            ]
+            
+            matchlist data
+            | a :: [ x :: y:: _] :: 4 :: _ ->
+                format("#1 match a={0} x={1} y={2}", a, x, y)
+            | a :: [ x :: y:: _] :: 5 :: _ ->
+                format("#2 match a={0} x={1} y={2}", a, x, y)
+            | ->
+                error 'Default pattern'
+        }
+        Expected: '
+           #1 match a=1 x=2 y=3
+           #1 match a=2 x=3 y=3
+           #1 match a=3 x=4 y=3
+           #2 match a=4 x=5 y=3
+           #2 match a=5 x=6 y=3
+           #2 match a=6 x=7 y=3
+        '
+        |> split r/\r/
+        |> replace r/^\s*/
+        |> SkipNullOrEmpty
+    }
+
+    # Test using a very complicated pattern to destructure a list
+    test 'ComplexMatch' {
+        test: {
+            data = ['foo', ['bar', 'baz'], 'buz', [[['biz'], 'boz']]]
+            match data
+            | 'foo' ::[{it == 'bar'} ::v1 ::_] :: 'buz' :: [[[v2 :: _] :: v3 :: _] :: _] :: _ ->
+                format("matched v1={0} v2={1} v3={2}",
+                    v1, v2, v3)
+            | -> 'Not matched'
+        }
+        Expected: 'matched v1=baz v2=biz v3=boz'
+    }
+
+    test 'ComplexParameterMatch' {
+        Test: {
+            data = ['foo', ['bar', 'baz'], 'buz', [[['biz'], 'boz']]]
+            # function with complex parameters
+            fn matchfn 'foo'::[{it == 'bar'} ::v1 ::_] :: 'buz' :: [[[v2 :: _] :: v3 :: _] :: _] :: _ ->
+                format("matched v1={0} v2={1} v3={2}", v1, v2, v3)
+            # call the function
+            matchfn(data)
+        }
+        Expected: 'matched v1=baz v2=biz v3=boz'
+    }
+}
+
+

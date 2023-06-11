@@ -1,0 +1,101 @@
+###############################################################
+#
+# Pattern matching examples in the Tiny language
+# for pattern matching and searching.
+#
+###############################################################
+
+# A database of people and relationships
+rels = [
+    ['parent-of', 'Bob',   'Sue'],
+    ['gender',    'Bob',   'Male'],
+    ['parent-of', 'Bob',   'John'],
+    ['gender',    'John',  'Male'],
+    ['parent-of', 'Sue',   'Bill'],
+    ['gender',    'Sue',   'Female'],
+    ['gender',    'Bill',  'Male'],
+    ['parent-of', 'Sue',   'Mary'],
+    ['gender',    'Alice', 'Female'],
+    ['gender',    'Mary',  'Female'],
+    ['parent-of', 'John',  'George'],
+    ['gender',    'George','Male'],
+    ['parent-of', 'John',  'Alice'],
+    ['parent',    'Male',  'Father'],
+    ['parent',    'Female','Mother']
+]
+
+#-------------------------------------------
+# Define some query functions
+
+fn getParents person ->
+    matchlist rels
+    | 'parent-of'::{person == it}::p::_ -> p
+    | -> null
+
+fn getGender person ->
+    (matchlist rels
+    |'gender'::{it == person}::gender::_ -> gender
+    | -> null)
+    .first()
+
+fn getGrandParents person -> getParents(person).flatmap{getParents(it)}
+
+fn getGrandFathers person -> getGrandParents(person).where{getGender(it) == 'male'}
+
+fn getMother person -> getParents(person).where{getGender(it) == 'female'}.first()
+
+#-------------------------------------------
+# Now use the queries
+
+println("\n\nPrint out everyone's gender:")
+println("==================================")
+
+matchlist rels
+| 'gender'::person::gender -> println("{0} is {1}", person.padleft(10), gender)
+
+println("\n\nDo some queries:")
+println("==================================")
+println("Bob's parents are {0}", getParents('Bob'))
+println("Sue's parents are {0}", getParents('Sue'))
+println("Bob's grandparents are {0}", getGrandParents("Bob"))
+println("Bob's grandfathers are {0}", getGrandfathers("Bob"))
+println("Sue's mother is {0}", getMother('Sue'))
+
+# Redefine functions to use ~ with pattern matching
+fn parents person ->
+    rels
+    .map{
+        it ~ 'parent-of'::{it == person}::parent::_
+        then parent
+    }
+
+fn grandParents person ->
+    parents(person)
+    .flatmap{parents(it)}
+
+fn getGender person ->
+    (matchlist rels
+    | 'gender'::{it == person}::gender::_ -> gender)
+    .first()
+
+fn getMother person ->
+    getParents(person)
+    .where{ getGender(it) == 'female'}
+    .First()
+
+println("\n\nDo some queries with the revised function:")
+println("==================================")
+println("Bob's parents are {0}", getParents('Bob'))
+println("Sue's parents are {0}", getParents('Sue'))
+println("Bob's grandparents are {0}", getGrandParents("Bob"))
+println("Bob's grandfathers are {0}", getGrandfathers("Bob"))
+println("Sue's mother is {0}", getMother('Sue'))
+
+println("\nGetting bob's grandparents using matchall")
+_ = rels |>
+    matchall('parent-of'::'bob'::parent::_,
+        {rels |> matchall('parent-of'::{it == parent}::grandparent::_,
+            {println("  - " + grandparent)})})
+
+
+

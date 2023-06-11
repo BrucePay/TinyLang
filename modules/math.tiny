@@ -1,0 +1,64 @@
+###################################################################
+#
+# Module that puts the methods in System.Math into
+# a hashtable for convenience
+#
+###################################################################
+
+Math = {
+    Abs:            [<System.Math>].Abs
+
+    Acos:           [<System.Math>].Acos
+
+    Asin:           [<System.Math>].Asin
+
+    Atan:           [<System.Math>].Atan
+
+    Atan2:          [<System.Math>].Atan2
+
+    Ceiling:        [<System.Math>].Ceiling
+
+    Cos:            [<System.Math>].Cos
+
+    Cosh:           [<System.Math>].Cosh
+
+    Exp:            [<System.Math>].Exp
+
+    Floor:          [<System.Math>].Floor
+
+    Log:            [<System.Math>].Log
+
+    Log10:          [<System.Math>].Log10
+
+    Pow:            [<System.Math>].Pow
+
+    Sin:            [<System.Math>].Sin
+
+    Sqrt:           [<System.Math>].Sqrt
+
+    Tan:            [<System.Math>].Tan
+
+    Tanh:           [<System.Math>].Tanh
+
+    BigMul:         [<System.Math>].BigMul
+
+    DivRem:         [<System.Math>].DivRem
+
+    IEEERemainder:  [<System.Math>].IEEERemainder
+
+    Max:            [<System.Math>].Max
+
+    Min:            [<System.Math>].Min
+
+    Round:          [<System.Math>].Round
+
+    Sign:           [<System.Math>].Sign
+
+    Truncate:       [<System.Math>].Truncate
+
+    E:              [<System.Math>].E
+
+    PI:             [<System.Math>].PI
+}
+
+

@@ -1,0 +1,636 @@
+#####################################################
+#
+# Simple examples using the Tiny programming language
+#
+#####################################################
+
+# Comments start with '#"
+
+import 'math'
+
+# Functions require parens around their arguments
+
+println("Hello world, welcome to Tiny!");
+
+# Basic arithmetic
+
+println("2+2 is", 2+2);
+println(2*(3+4)/3);
+println("adding " + "strings " + "together");
+
+# Array literals use '[' and ']'
+[1, 2, 3, 4, 5];
+[1, 2, [3, 4], 5];  # => nested arrays
+
+# ranges use the range function or the .. operator
+range(1,5);   # => [1, 2, 3, 4, 5]
+range(1,5,2); # => [1,3,5]
+[1..5];       # => [1, 2, 3, 4, 5]
+[1,[2..3],4]; # => [1 [2, 3], 4]
+1..5..2;      # => [1, 3, 5]
+
+# objects/dictionary literals
+{a : 1, b : 2, c : 3};
+{a : 1, b: {c: 2, d:3}, e: 4}; # => nested dictionary
+
+# Define a simple function to print out separator lines
+fn sep ()
+{
+    println("");
+    println("================================");
+    println("");
+}
+
+# and call it, with zero arguments
+sep();
+
+#
+# Dump out the predefined functions and variables
+#
+println("Here is the help function 'functions()'");
+functions();
+functions("string") # print functions containing "string"
+
+sep();
+
+###############################################
+#
+# Simple factorial function based on reduce()
+#
+
+fn fact n -> range(1,n).reduce{x, y -> x * y}
+
+println("fact(5) is " + fact(5));
+
+# Apply it to a a range of numbers
+range(2,20, 3).foreach{n -> println("fact of {0} is {1}", n, fact(n))}
+
+# Functions can have type constraints and initializers
+fn fact [<int>] n = 5 -> range(1,n).reduce{x, y -> x * y}
+
+println("fact(5) is " + fact());
+
+# Multiline functions use '{' and '}' instead of '->'
+fn foo x=1 y=2 {
+    println("In function foo");
+    println("foo() = ", x+y);
+}
+
+foo()
+
+sep();
+
+
+###############################################
+#
+# Simple recursive fib  function using the 'match' statement
+#
+
+fn fib n -> match n
+            | 1 -> 1
+            | 2 -> 1
+            | -> fib(n-1) + fib(n-2)
+
+println("fibs: " + range(2,10).map{n -> fib(n)});
+
+sep();
+
+###############################################
+#
+# Compute primes using the Sieve of Eratosthenes
+#
+# Function to get all the primes up to the specified max
+fn getPrimes max {
+
+    # Utility to mark all of the multiples of this number
+    fn mark num, arr, max ->
+        [num*2 .. max .. num]
+        .foreach{n -> arr[n] = false}
+        
+    # for all primes, mark the multiples of that prime
+    fn markall arr, max ->
+        [2 .. max].foreach{ mindex ->
+                if (mindex * 2 < max && arr[mindex]) {
+                    mark(mindex, arr, max)
+                }
+            }
+        
+    primes = [0 .. max].map{true};
+    markall(primes, max);
+    [2 .. max].where{n -> primes[n]};
+}
+
+primesFound = getPrimes(100);
+
+println("Found " + getlength(primesFound) + " primes:");
+println(asstring(primesFound));
+
+sep();
+
+###############################################
+#
+# Recursively reverse a list; uses multi assignment
+#
+
+fn rev list ->
+    if (list) {
+        hd::list = list;
+        rev(list) + hd;
+    } 
+    else {
+        [];
+    }
+
+println("Defined rev(list) function");
+
+list = [1, 2, 3, 4, 5, 6];
+println("Reversing a list:");
+println("In:  " + list);
+println("Out: " + rev(list));
+
+if (rev(list) != list.reverse()) {
+    error("The reversed lists should be the same");
+}
+
+sep();
+
+###############################################
+#
+# Towers of Hanoi
+#
+
+fn dohanoi n, to, from, using ->
+    if (n > 0) {
+        n -= 1;
+        dohanoi(n, using, from, to);
+        println("move " + from + " ==> " + to);
+        dohanoi(n, to, using, from);
+    }
+
+disks = 4;
+println("Doing tower of hanoi with " + disks + " disks"); 
+dohanoi(disks, 3, 1, 2);
+
+sep();
+
+###############################################
+
+# read the file and sum the length of each line to get total number of characters
+println("Computing the number of chars in 'snake.tiny'; please wait...")
+chars = readfile("./snake.tiny").map{l -> l.length}.sum();
+
+println("Number of characters in 'snake.tiny' is {0}.", chars);
+
+println("There are {0} functions defined in that file.",
+    readfile("./snake.tiny", "function").count);
+
+sep();
+
+###############################################
+#
+# recursive list summing function with pattern matching
+#
+fn sumlist list sumSoFar=0 ->
+    match list
+    | h::t -> sumlist(t, sumSoFar+h)
+    | -> sumSoFar
+
+println("Sum of {0} is {1}", [1..10], [1..10] |> sumlist)
+
+sep();
+
+###############################################
+#
+# Print a list using pattern matching
+#
+
+fn prlist list ->
+    while (true) {
+        match list
+        | a::list -> println(a)
+        | -> break
+    }
+
+prlist([1,2,4..6,[10,11],14,[0..6..2],20])
+
+sep();
+
+###############################################
+
+println("Extracting words from a file");
+
+words = readfile("snake.tiny")
+        .flatmap{l -> l /~ "\s+"}
+        .sort();
+
+println("Total number of words in the doc is {0}", getlength(words));
+println("Putting them into a hashtable to see which ones are unique.");
+wordhash = {};
+foreach (w in words) {wordhash[w] = true};
+println("Number of unique words in the document is: {0}", keys(wordhash).count);
+
+sep();
+
+###############################################
+# Implement a 'quicksort' with patterns
+
+fn qsort lst ->
+    match lst
+    | [] -> []
+    | pivot :: tl ->
+        match tl.split{ it < pivot }
+        | smaller :: larger :: _ ->
+            qsort(smaller) + pivot + qsort(larger);
+
+println("Try out the qsort function.");
+20 |> getrandom |> qsort |> join ', ' |> println
+println("Done qsort.")
+
+sep();
+
+################################################
+# an alternate implementation of qsort using
+# patterns and function sets
+#
+def qsortfs []      -> []
+def qsortfs p::[]   -> [p]
+def qsortfs p::tail -> tail.split{it < p} ~ s::l then qsortfs(s) + p + qsortfs(l)
+
+
+println("Try out the alternate qsort function.");
+20 |> getrandom |> qsort |> join ', ' |> println
+println("Done qsort.")
+
+sep();
+
+###############################################
+#
+# Find the sentence in a paragraph that contains a specific word.
+
+text = "
+Historically, the world of data and the world of objects
+have not been well integrated. Programmers work in C# or Visual Basic
+and also in SQL or XQuery. On the one side are concepts such as classes,
+objects, fields, inheritance, and dotNET Framework APIs. On the other side
+are tables, columns, rows, nodes, and separate languages for dealing with
+them. Data types often require translation between the two worlds; there are
+different standard functions. Because the object world has no notion of query, a
+query can only be represented as a string without compile-time type checking or
+IntelliSense support in the IDE. Transferring data from SQL tables or XML trees to
+objects in memory is often tedious and error-prone.
+"
+
+println("Setting up wordsToMatch hash")
+wordsToMatch =  {
+                    Historically: false
+                    data:         false
+                    integrated:   false
+                };
+
+println("Defining initHash function")
+fn inithash -> foreach (k in keys(wordsToMatch)) { wordsToMatch[k] = false; }
+
+println("Words to match")
+println(wordstomatch)
+
+fn allTrue -> values(wordstomatch).reduce{x, y -> x && y }
+
+fn setIfContained word -> if (wordsToMatch :> word) { wordsToMatch[word] = true }
+
+# Remove commas then split the text into sentences
+sentences = text -~ ',' -~ ['\s+', ' '] /~ '[.?!]+'
+println("Sentences to process:")
+println("------------------------")
+printlist(sentences);
+
+# now do the matching...
+matched = false
+sentences.
+    foreach{sentence ->
+        initHash();
+        split(sentence, " +").
+            foreach{word -> setIfContained(word)};
+        if (allTrue()) {
+            println("------------------------");
+            println("MATCHING SENTENCE: " + sentence);
+            matched = true
+        };
+    };
+
+if (not(matched)) { error("!!!!!!!!!!!!!!!!!!!!! Matching sentence was not found!") }
+
+sep();
+#############################################################
+
+println("Testing 'objecty' features");
+
+# create an "object"
+h = {
+    # value member
+    val  : 0;
+    # method eith no args
+    incr : {this.val += 11};
+    # method with one arg
+    Add  : {n -> this.val += n}
+};
+
+# print it
+println(h);
+# set the property then print it
+h.val = 1;
+println(h);
+# call the increment method then print it
+h.Incr();
+println(h);
+# call the add method then print it
+h.add(10);
+println(h);
+
+println 'Done objecty features'
+
+sep();
+#################################################
+#
+# Euclid's gcd function
+# 
+fn gcd (a, b) {
+    while (a != b) {
+        if (a > b) {
+            a = a - b
+        }
+        else {
+            b = b - a
+        }
+    }
+    a
+}
+
+println("gdc of 165 and 75 is " + gcd(165, 75))
+
+sep();
+#################################################
+#
+
+println("sin waves");
+amplitude = 40;
+[0 .. 6 .. 0.1]
+    .map{val -> math.floor(amplitude * math.sin(val)) }
+    .foreach{println(" " * (amplitude + it) + "*") }
+
+
+sep();
+#################################################
+# Test out the assignment operations
+println("Test out the assignment operations");
+a = 5;
+a += 1;
+if (a != 6) { error("+= failed; a should be 6") }
+a = 6;
+a -= 2;
+if (a != 4) { error("-= failed; a should be 4") }
+a = 8;
+a *= 3;
+if (a != 24) { error("*= failed; a should be 24") }
+a = 64;
+a /= 8;;
+if (a != 8) { error("/= failed; a should be 8") }
+
+println("Done testing the assignment operations");
+
+sep();
+
+println("\nTesting match statement")
+
+println("Matching on types")
+fn testmatch x -> match x
+                    | [<int>]         -> "int"
+                    | [<string>]      -> "string"
+                    | [<IDictionary>] -> "hash"
+                    |-> "unknown"
+
+if ((result = testmatch(1)) != "int") {
+    error("testmatch: got " + result + " instead of 'int'" )
+}
+if ((result = testmatch("abc")) != "string") {
+    error("testmatch: got " + result + " instead of 'string'" )
+}
+if ((result = testmatch({})) != "hash") {
+    error("testmatch: got " + result + " instead of 'hash'" )
+}
+if ((result = testmatch(getdate())) != "unknown") {
+    error("testmatch: got " + result + " instead of 'unknown'")
+}
+
+println("Matching with regex")
+fn testmatch2 x -> match x
+                    | regex('^a') -> "Eh"
+                    | regex('^b') -> {"Bee" }
+                    | regex('^c') -> "See"
+                    | -> "default"
+
+if((result = testmatch2('abc')) != 'Eh') {
+    error("testmatch2: got " + result + " instead of 'Eh'" )
+}
+if((result = testmatch2('bca')) != 'Bee') {
+    error("testmatch2: got " + result + " instead of 'Bee'" )
+}
+if((result = testmatch2('cab')) != 'See') {
+    error("testmatch2: got " + result + " instead of 'See'" )
+}
+
+println("Matching with regex literals")
+fn testmatch2 x -> match x
+                    | r/^a/ -> "Eh"
+                    | r/^b/ -> {"Bee" }
+                    | r/^c/ -> "See"
+                    |       -> "default"
+
+if((result = testmatch2('abc')) != 'Eh') {
+    error("testmatch2: got " + result + " instead of 'Eh'" )
+}
+if((result = testmatch2('bca')) != 'Bee') {
+    error("testmatch2: got " + result + " instead of 'Bee'" )
+}
+if((result = testmatch2('cab')) != 'See') {
+    error("testmatch2: got " + result + " instead of 'See'" )
+}
+
+
+println("Testing match in a loop")
+# Test match in a loop
+range(1,10).foreach{
+    match it
+        | {it % 2 == 0} -> println("two " + it)
+        | {it % 3 == 0} -> println("three " + it)
+        | -> println("neither " + it)}
+
+println("\nGetting the names of functions and variables " +
+        "defined in this file.\n")
+
+time {
+f = []
+v = []
+readfile("snake.tiny")
+    .foreach{
+        match it
+        | r/ *fn +([a-z0-9]+)/    -> f += matches[1]
+        | r/ *([a-z0-9]+) *=[^=]/ -> v += matches[1]
+    }
+    println("Functions: " + f.Distinct())
+    println("Variables: " + v.Distinct())
+}
+println("\nDone testing match statement.")
+
+sep();
+################################################
+#
+# Recursive length computation
+#
+
+fn len list ->
+    match list
+    | [] -> 0
+    | _::tail -> 1 + len(tail)
+
+println("Length should be 10: {0}", len([1..10]))
+
+sep();
+################################################
+#
+# Recursive implementation of map()
+#
+fn myMap list f ->
+    match list
+    | hd :: tl -> f(hd) :+ myMap(tl, f)
+    | [] -> []
+
+result = [1, 2, 3] |> myMap {n -> n * n}
+
+println("Result of myMap should be [1, 4, 9]: {0}", result)
+result != [1, 4, 9] then error('myMap: the results didn''t match')
+
+# map() implemented with function sets and patterns 
+def mmap [] f -> []
+def mmap x::xs f -> f(x) :+ mmap(xs, f)
+println(mmap([1..10], {x -> x * 2}).ToString())
+
+sep();
+################################################
+
+result = [1..100]
+    |> matchall('^2')   # get all the numbers that start with '2'
+    |> sum()            # sum the numbers
+    |> math.sqrt        # get the sqrt of the sum
+    |> math.floor       # convert it into an int.
+
+println("Testing the pipe |> operator; should be 15: {0}", result)
+
+sep();
+################################################
+#
+# Various method chaining examples
+#
+
+println("Get the ten largest files in the current directory:\n")
+shell('gci -file')
+    .sortdescending{it.length}
+    .take(10)
+    .map{n -> format("{0} {1}", asstring(n.length).padright(10), n.name)}
+    .print()
+
+sep();
+
+println("\nGet the ten processes with the largest working set:\n")
+ shell('gps')
+    .sortdescending{it.ws}
+    .take(10)
+    .map { asstring(it.ws).padright(10) + it.name }
+    .print()
+
+sep()
+
+println("Get the 10 most common words in a file")
+
+time {
+
+readfile('snake.tiny')
+    .replace('[^a-z ]+')    # get rid of punctuation, etc.
+    .split('\s+')           # split the lines into words
+    .SkipNullOrEmpty()      # remove the empty elements
+    .tohash()               # Turn it into a hashtable
+    .getenumerator()        # Get the enumerator
+    .aslist()               # and turn it into a list.
+    .sortdescending{it.value} # sort the list in descending frequence
+    .take(10)               # take the top 10 most common
+    .foreach{println(it.key.padleft(14) + " " + it.value)}
+}
+
+println("\nAnd again with a slightly different approach using operators")
+
+time {
+
+(readtext('snake.tiny') -~ '[^a-z ]' /~ '\s+')
+    .tohash()
+    .getenumerator()
+    .aslist()
+    .sortdescending{ it.value } # sort the list in descending frequence
+    .take(10)
+    .outhost()
+}
+
+sep()
+
+println("\nAnd again with a slightly different approach using the pipe ('|>') operator and functions")
+time {
+'snake.tiny'
+    |> readtext
+    |> replace(r/[^a-z ]+/)
+    |> split(r/ +/)
+    |> toHash()
+    |> sortdescending{ it.value }
+    |> First(10)
+    |> println()
+}
+
+sep()
+
+println("\nget most common extensions in the current directory\n")
+
+time { 
+
+shell("gci -file")
+    .map{it.extension}
+    .tohash()
+    .getenumerator()
+    .aslist()
+    .sortdescending{it.value}
+    .outhost()
+}
+
+println("\nGet the 10 highest working set processes again using the pipe operator.")
+time {
+shell("gps")
+    |> sortdescending('WS')
+    |> first(10)
+    |> printlist()
+}
+
+sep()
+
+println("Get the 10 most common letters in 'snake.tiny' file.")
+time {
+    readtext('snake.tiny').tochararray()
+        |> tohash() 
+        |> sortdescending{it.value} 
+        |> first(10) 
+        |> outhost()
+}
+
+sep()
+
+println("All done - bye bye!");
+
+# Return a list to show that scripts can return values
+[1,2,3,4]
+
+

@@ -1,0 +1,339 @@
+##########################################
+#
+# Tiny utilities for working with the console
+#
+##########################################
+
+import utils
+
+Console = {
+
+    #
+    # position the cursor on the screen
+    #
+    SetCursor: { x, y -> [<System.Console>].SetCursorPosition(x, y) }
+
+    #
+    # print at a specific screen location
+    #
+    PrintAt: ScriptBlock('param([int] $x, [int] $y, [string] $str)
+                    if ($null -ne $args -and $argsLength -gt 0) {
+                        $str = $str -f $args
+                    }
+                    [console]::SetCursorPosition($x, $y)
+                    [console]::Write($str)
+                ').InvokeReturnAsIs
+
+    #
+    # Clear a line on the screen by filling it with the specified character
+    #
+    ClearLine: {  [<int>] y, [<string>] chaRToUse = ' '->
+        width = this.GetWindowWidth()-1;
+        this.PrintAt(0, y, charToUse * width)
+    }
+
+    #
+    # read a line at a specific location
+    #
+    ReadLineAt: { x, y ->
+        this.SetCursor(x, y);
+        [<System.Console>].ReadLine()
+    }
+
+    #
+    # prompt at a specific screen location
+    #
+    PromptAt: { x, y, width, str ->
+        if (width == 0) {
+            width = str.Length + 1
+        }
+        elseif (str.length > width) {
+            str = str.substring(0, width)
+        }
+
+        # Show the prompt
+        ofgc = [<console>].ForegroundColor
+        [<console>].set_ForegroundColor('green')
+        this.printat(x, y, str)
+        [<console>].set_ForegroundColor(ofgc)
+
+        # then read the input
+        this.readlineat(x+width, y)
+    }
+
+    #
+    # prompt at a specific screen location using the default width of the str
+    #
+    PromptAt: { x, y, str ->
+        this.PromptAt(x, y, 0, str)
+    }
+
+    #
+    # Draw a box on the screen.
+    #
+    DrawBox: {x, y, width, height, color = 'blue' ->
+        oldFg = this.GetBackGroundColor();
+        try {
+            # First clear the box area
+            [y .. y+height].foreach{
+                this.printat(x, y, " " * width)
+            }
+
+            # Then draw the box.
+            this.SetBackgroundColor(color);
+            this.printat(x, y, " " * width);
+            [y .. y+height].foreach{
+                this.printat(x, it, " ")
+                this.printat(x+width, it, " ")
+            }
+            this.printat(x, y+height, " " * width)
+        }
+        finally {
+            this.SetBackgroundColor(oldFg)
+        }
+    }
+
+    #
+    # Show an announcement in a box at the center of screen.
+    #
+    Announce: {
+        msg, color, width ->
+            oldFg = this.GetForegroundColor();
+            # split the message into chunks
+            width = if (width < 40) { 40 } else { width }
+            width = if (width > this.GetWindowWidth() - 4) { this.GetWindowWidth() - 4 } else { width }
+            msg = "$msg".Trim() |> replace("[ \n\t]+", ' ') |> utils.ChompAll(width)
+
+            # Get the width of the longest line.
+            linewidth = (msg |> utils.max {it.Length}) + 4
+            width = utils.max(linewidth, width)
+
+            msg += ['',' ' * [<math>].round((width-30) / 2) + 'Press any key to continue.']
+            height = msg.Count + 4
+
+            x = (this.GetWindowWidth() - width) / 2 as [<int>];
+            y = (this.GetWindowHeight() - height) / 2 as [<int>];
+
+            # Erase the announceent area.
+            line = ' ' * width
+            foreach (y1 in y..y+height) {
+                this.printAt(x, y1, line)
+            }
+
+            # Draw the outline.
+            this.DrawBox(x, y, width, height, color);
+
+            # Write the text inside the box
+            x += 3
+            y += 2
+            try {
+                this.SetForegroundColor(color)
+                foreach (line in msg) {
+                    this.printat(x, y, line)
+                    y += 1
+                }
+            }
+            finally {
+                this.SetForegroundColor(oldFg)
+                this.SetCursor(0, 0)
+            }
+            this.readkey(true)
+    }
+
+    Announce: { msg, color -> this.Announce(msg, color, 40) }
+
+    Announce: { msg -> this.Announce(msg, this.GetForegroundColor(), 40) }
+
+    #
+    # Read a fixed-length editable field from the console, setting the fore and background colors.
+    #
+    ReadField: {
+        x, y, width, fg, bg, initialText ->
+            chars  = [<TinyList>].new("$initialText".ToCharArray())
+            offset = 0
+            oldFg  = this.GetForegroundColor()
+            oldBg  = this.GetBackgroundColor()
+            oldCV  = this.GetCursorVisible()
+            input  = null
+
+            try {
+                this.SetCursorVisible(true)
+                if (fg) {
+                    this.SetForegroundColor(fg)
+                }
+        
+                if (bg) {
+                    this.SetBackgroundColor(bg)
+                }
+
+                # Clear the field.
+                this.printAt(x, y, " " * width)
+        
+                while (true) {
+                    this.printAt(x, y, chars.join())
+                    this.SetCursor(x+offset, y)
+                    input = this.ReadKey(true)
+                    match input
+                    | {:: Key:'RightArrow'::} -> if (offset < width && offset < chars.Count) {offset += 1 }
+                    | {:: Key:'LeftArrow'::}  -> if (offset > 0) {offset -= 1 }
+                    | {:: key:'BackSpace'::}  -> if (offset > 0) {
+                                                      offset -= 1
+                                                      chars.RemoveAt(offset)
+                                                      this.printAt(x, y, " " * width)
+                                                 };
+                    | {::key:'Delete'::}       -> if (offset < chars.Count) {
+                                                        chars.RemoveAt(offset)
+                                                        this.printAt(x, y, " " * width)
+                                                 };
+                    | {::Key:'UpArrow'::}
+                    | {::key:'DownArrow'::}
+                    | {::key:'Enter'::}
+                    | {::key:'Tab' Modifiers:'Shift'::}
+                    | {::key:'Tab' ::}
+                    | {::key:'Escape'::} -> break
+
+                    | -> {
+                        if (input.KeyChar && input.Modifiers != 'Control') {
+                            if (offset < width) { 
+                                chars.Insert(offset, input.KeyChar)
+                                offset += 1
+                            }
+                        }
+                    }
+                }
+            } finally {
+                this.SetCursorVisible(oldCV)
+                this.SetForegroundColor(oldfg)
+                this.SetBackgroundColor(oldbg)
+            }
+
+            # return the form result
+            {
+                key:    input
+                text:   chars.join()
+            }
+    }
+
+    #
+    # Read a fixed-length editable field from the console.
+    #
+    ReadField: { x, y, width, initialText -> this.ReadField(x, y, width, null, null, initialText) }
+
+    #
+    # Display a status message at the top or bottom of the screen.
+    #
+    Status: {
+        [<bool>] top, [<string>] statusMsg ->
+            if (top) {
+                y1 = 1
+                y2 = 0
+            }
+            else {
+                y = console.GetWindowHeight()-1
+                y1 = y - 3
+                y2 = y - 2 
+            }
+            oldFg = console.GetForeGroundColor();
+            oldBg = console.GetBackGroundColor();
+            try {
+                Console.SetForegroundColor('yellow')
+                Console.SetBackgroundColor('black')
+                Console.SetCursor(0, y1)
+                Console.Write('-' * (Console.GetWindowWidth()-1))
+                Console.SetCursor(0, y2)
+                Console.Write(statusMsg.PadRight(Console.GetWindowWidth()-1))
+            }
+            finally {
+                Console.SetForegroundColor(oldFg)
+                Console.SetBackgroundColor(oldBg)
+            }
+    }
+
+    #
+    # Display a status message at the bottom of the screen.
+    #
+    Status: {[<string>] statusMsg -> this.Status(false, statusMsg)}
+
+    #
+    # Clear the screen
+    #
+    Cls: { this.Clear() }
+
+    #
+    # Get or set the current window title
+    #
+    Title: { Title = null ->
+        if (title) {
+            [<System.Console>].Title = title
+        }
+        else {
+            [<System.Console>].Title
+        }
+    }
+
+    #
+    # All of the members from [<System.Console>]
+    #
+    SetForegroundColor: [<console>].set_ForegroundColor
+    GetForegroundColor: [<console>].get_ForegroundColor
+    GetIn:              [<console>].get_In
+    SetInputEncoding:   [<console>].set_InputEncoding
+    GetInputEncoding:   [<console>].get_InputEncoding
+    GetOutputEncoding:  [<console>].get_OutputEncoding
+    SetOutputEncoding:  [<console>].set_OutputEncoding
+    GetKeyAvailable:    [<console>].get_KeyAvailable
+    GetOut:             [<console>].get_Out
+    GetError:           [<console>].get_Error
+    GetIsInputRedirected: [<console>].get_IsInputRedirected
+    GetIsOutputRedirected: [<console>].get_IsOutputRedirected
+    GetIsErrorRedirected: [<console>].get_IsErrorRedirected
+    GetCursorSize:      [<console>].get_CursorSize
+    SetCursorSize:      [<console>].set_CursorSize
+    GetNumberLock:      [<console>].get_NumberLock
+    GetCapsLock:        [<console>].get_CapsLock
+    GetBackgroundColor: [<console>].get_BackgroundColor
+    SetBackgroundColor: [<console>].set_BackgroundColor
+    SetBufferWidth:     [<console>].set_BufferWidth
+    GetBufferWidth:     [<console>].get_BufferWidth
+    GetBufferHeight:    [<console>].get_BufferHeight
+    SetBufferHeight:    [<console>].set_BufferHeight
+    GetWindowLeft:      [<console>].get_WindowLeft
+    SetWindowLeft:      [<console>].set_WindowLeft
+    GetWindowTop:       [<console>].get_WindowTop
+    SetWindowTop:       [<console>].set_WindowTop
+    GetWindowWidth:     [<console>].get_WindowWidth
+    SetWindowWidth:     [<console>].set_WindowWidth
+    GetWindowHeight:    [<console>].get_WindowHeight
+    SetWindowHeight:    [<console>].set_WindowHeight
+    GetLargestWindowWidth: [<console>].get_LargestWindowWidth
+    GetLargestWindowHeight: [<console>].get_LargestWindowHeight
+    GetCursorVisible:   [<console>].get_CursorVisible
+    SetCursorVisible:   [<console>].set_CursorVisible
+    SetCursorLeft:      [<console>].set_CursorLeft
+    GetCursorLeft:      [<console>].get_CursorLeft
+    SetCursorTop:       [<console>].set_CursorTop
+    GetCursorTop:       [<console>].get_CursorTop
+    GetTreatControlCAsInput: [<console>].get_TreatControlCAsInput
+    SetTreatControlCAsInput: [<console>].set_TreatControlCAsInput
+    ReadKey:            [<console>].ReadKey
+    ResetColor:         [<console>].ResetColor
+    SetBufferSize:      [<console>].SetBufferSize
+    SetWindowPosition: [<console>].SetWindowPosition
+    SetWindowSize:      [<console>].SetWindowSize
+    Beep:               [<console>].Beep
+    MoveBufferArea:     [<console>].MoveBufferArea
+    Clear:              [<console>].Clear
+    SetCursorPosition:  [<console>].SetCursorPosition
+    add_CancelKeyPress: [<console>].add_CancelKeyPress
+    remove_CancelKeyPress: [<console>].remove_CancelKeyPress
+    OpenStandardInput:  [<console>].OpenStandardInput
+    OpenStandardOutput: [<console>].OpenStandardOutput
+    OpenStandardError:  [<console>].OpenStandardError
+    SetIn:              [<console>].SetIn
+    SetOut:             [<console>].SetOut
+    SetError:           [<console>].SetError
+    Read:               [<console>].Read
+    ReadLine:           [<console>].ReadLine
+    WriteLine:          [<console>].WriteLine
+    Write:              [<console>].Write
+}

@@ -1,0 +1,212 @@
+########################################################################
+#
+# Tiny file Utilities Module.
+#
+# Merges methods from System.IO.FIle, System.IO.Path; PowerShell cmdlets
+# and utiities written in Tiny. 
+#
+########################################################################
+
+#
+# File handling utilities for Tiny. This module is a mix of functionality
+# from System.IO.Path and System.IO.File as well as custom methods
+# in PowerShell and Tiny.
+#
+IO = {
+
+    # Read all of the lines in a file.
+    ReadAllLines: { path ->
+                        if (not (this.FileExists(path))) {
+                            throw (format("ReadAllLines: Path ''{0}'' is inaccessible or does not exist.", path))
+                        }
+                        [<System.IO.File>].ReadAllLines(path).AsList()
+                  }
+
+    # Reverse the order of arguments so this works in pipeing scenarios.
+    WriteAllLines: {lines, file, encoding ->
+                        if (encoding) {
+                            [<System.IO.File>].WriteAllLines(file, lines, encoding)
+                        }
+                        else {
+                            [<System.IO.File>].WriteAllLines(file, lines)
+                        }
+                    }
+
+    ReadAllText: { path ->
+                        if (not (this.FileExists(path))) {
+                            throw (format("ReadAllText: Path ''{0}'' is inaccessible or does not exist.", path))
+                        }
+                        [System.Io.File]::ReadAllText(path)
+                 }
+
+    WriteAllText: {
+            text, file, encoding ->
+            if (encoding) {
+                [<System.IO.File>].WriteAlltext(file, text, encoding)
+            }
+           else {
+                [<System.IO.File>].WriteAllLines(file, text)
+           }
+      }
+
+
+    Files: { filter, path ->
+                filter ?= '*';
+                path  ?= pwd();
+                [<System.Io.Directory>].EnumerateFiles(path, filter).AsList()
+            }
+
+    Dirs: { filter, path ->
+                filter ?= '*';
+                path  ?= pwd();
+                [<System.Io.Directory>].EnumerateDirectories(path, filter).AsList()
+            }
+
+    Cd : { path ->
+            # Keep the process working directory and the PowerShell runspace current directory in sync.
+            shell("Set-Location '" + path + "'")
+            [<System.Environment>].CurrentDirectory = shell('Get-Location')[0].Path
+         }
+
+    # Varargs function that joins all of the argument paths
+    JoinPath: { args -> args |> reduce { [<System.IO.Path>].Combine(it, it2) }}
+
+    IsPathFullyQualified:   [<System.IO.Path>].IsPathFullyQualified
+
+    HasExtension:           [<System.IO.Path>].HasExtension
+
+    ChangeExtension:        [<System.IO.Path>].ChangeExtension
+
+    DirName:                [<System.IO.Path>].GetDirectoryName
+
+    Extension:              [<System.IO.Path>].GetExtension
+
+    BaseNameNoExtension:    [<System.IO.Path>].GetFileNameWithoutExtension
+
+    BaseName:               [<System.IO.Path>].GetFileName
+
+    SetLastWriteTime:       [<System.IO.File>].SetLastWriteTime
+
+    GetLastWriteTime:       [<System.IO.FIle>].GetLastWriteTime
+
+    GetAttributes:          [<System.IO.File>].GetAttributes
+
+    SetAttributes:          [<System.IO.File>].SetAttributes
+
+    Touch: { path ->        [<System.IO.File>].SetLastWriteTime(path, getdate()) }
+
+    Newer: { file1, file2 -> IO.GetLastWriteTime(file1) > IO.GetLastWriteTime(file2) }
+
+    TestPath: ScriptBlock('
+            [cmdletbinding()]
+            param( [Parameter(Mandatory)] [string] $path)
+
+            Test-Path $path
+        ').InvokeReturnAsIs
+
+    # Print a line to the screen.
+    Println: ScriptBlock('
+        if (-not $args)
+            { ShowValue "" }
+        elseif ($args.Length -eq 1)
+            { ShowValue $args[0] }
+        else {
+            $f, $v = $args
+            ShowValue ("$f" -f @($v))
+        }
+    ').InvokeReturnAsIs
+
+    # Print a line to the screen without a newline.
+    Print: ScriptBlock('
+        if (-not $args) { return }
+        if ($args.count -gt 1) {
+            $str, $vals = $args
+            $msg = $str -f @($vals)
+        }
+        else {
+            $msg = "$args"
+        }
+        Write-Host -nonewline $msg
+    ').InvokeReturnAsIs
+
+    # Use the PowerShell Out-Host cmdlet to write to the screen.
+    OutHost: ScriptBlock('
+        param ($value)
+        if ($value -is [TinyList]) {
+            $value = $value.List
+        }
+        $value | Out-Host
+    ').InvokeReturnAsIs
+
+    # Write an error to the screen
+    Error: ScriptBlock('
+       if (-not $args) {
+            ShowValue -color red ""
+        }
+        elseif ($args.Length -eq 1) {
+            $err = $args[0]
+            if ($err -is [TinyException]) {
+                ShowValue -color red $err.ToString()
+            }
+            else {
+                ShowValue -color red $err
+            }
+        }
+        else {
+            $f, $v = $args
+            ShowValue -color red ("$f" -f @($v))
+        }
+    ').InvokeReturnAsIs
+
+    # Write an alert to the screen
+    Alert: ScriptBlock('
+        if (-not $args) {
+            ShowValue -color green ""
+        }
+        elseif ($args.Length -eq 1) {
+            $err = $args[0]
+            if ($err -is [TinyException]) {
+                ShowValue -color green $err.ToString()
+            }
+            else {
+                ShowValue -color green $err
+            }
+        }
+        else {
+            $f, $v = $args
+            ShowValue -color green ("$f" -f @($v))
+        }
+    ').InvokeReturnAsIs
+
+    # Write a warning to the screen
+    Warn: ScriptBlock('
+        if (-not $args) {
+            ShowValue -color yellow ""
+        }
+        elseif ($args.Length -eq 1) {
+            $err = $args[0]
+            if ($err -is [TinyException]) {
+                ShowValue -color yellow $err.ToString()
+            }
+            else {
+                ShowValue -color yellow $err
+            }
+        }
+        else {
+            $f, $v = $args
+            ShowValue -color yellow ("$f" -f @($v))
+        }
+    ').InvokeReturnAsIs
+
+    Copy:       [<io.file>].copy
+
+    Remove:     [<IO.FIle>].Delete
+
+    RemoveDir:  [<IO.Directory>].Delete
+
+    FileExists: [<IO.FIle>].Exists
+
+    DirExists:  [<IO.Directory>].Exists
+}
+
+

@@ -1,0 +1,51 @@
+#############################################################
+#
+# Script to simulate dealing a hand of cards.
+# (After a similar F# example.)
+#
+#############################################################
+
+ranks = [ "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten" ]
+   
+faces = [ "Jack", "Queen", "King", "Ace" ]
+   
+suits = [ "Diamonds", "Clubs", "Hearts", "Spades" ]
+
+# Generate all the rank cards in each suit   
+rankCards = suits.map{s -> ranks.map{ "$it of $s"}}
+
+# Generate all the face cards in each suit   
+faceCards = suits.map{s -> faces.map{ "$it of $s"}}
+   
+# Merge the rank and face cards.
+fiftyTwoCards = (rankCards + faceCards) |> flatten
+
+#
+# Generate a sequence of random numbers representing the deck draw order
+# by generating 1000 random numbers mod 52 and then remove the duplicates.
+# This will leave us with 52 cards. (There is a chance that there will be
+# less than 52 but it's very small.)
+#
+draworder = []
+fn startRound -> draworder.Clear() do
+                 draworder.AddRange(getrandom(1000).map{it % 52}.distinct())
+
+# Deal the specified number of cards. Note this routine modifies the
+# the draworder list, popping each card off the list.
+fn deal n ->
+    match n
+    | draworder.Count < n -> throw "Not enough cards are available to draw a hand of $n cards."
+    |                     -> while (n) { n -= 1;  fiftyTwoCards[draworder.Pop()] }
+
+info "Starting the round."
+startRound()
+
+handNumber = 1
+while (drawOrder.Count >= 5) {
+    println("\nDeal a hand of 5, hand number $handNumber")
+    deal(5) |> println()
+    handNumber += 1
+}
+
+info "All complete hands have been dealt."
+

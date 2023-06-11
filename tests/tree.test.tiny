@@ -1,0 +1,223 @@
+
+import 'math'
+import 'utils'
+import 'tinytestutils'
+
+# Function that returns a map from an operator to
+# its implementation
+fn opMap -> {
+        "+" : {x, y -> x + y }
+        "-" : {x, y -> x - y }
+        "*" : {x, y -> x * y }
+        "/" : {x, y -> x / y }
+        "%" : {x, y -> x % y }
+    }
+
+# Construct a binary tree node. This function adds
+# methods to the hashtable
+fn tree val, left, right ->  {
+        # The value of this node
+        val    :  val
+
+        # The left subtree
+        left   :  left
+
+        # The right subtree
+        right  :  right
+
+        # Method to print the tree
+        Print  : { offset ->
+
+            offset ?= 0
+
+            p1 = match this.left
+            | [<IDictionary>] -> this.left.Print(offset+2)
+            | -> " " * (offset+2) + this.left + "\n"
+
+            p2 = match this.right
+            | [<IDictionary>] -> this.right.Print(offset+2)
+            | -> " " * (offset+2) + this.right + "\n"
+
+            p1 + ' ' + p2 + ' ' + (" " * offset + this.Val + "\n")
+        }
+
+        # method to evaluate the tree
+        Eval : {
+            v1 = match this.left
+                | [<IDictionary>] -> this.left.eval()
+                | -> number(this.left)
+
+            v2 = match this.right
+                | [<IDictionary>] -> this.right.eval()
+                | -> number(this.right)
+
+            opMap()[this.val].invoke([v1, v2])
+        }
+    }
+
+# Create a tree using the constructor function which
+# adds methods to the nodes
+testtree1 = tree('+',
+            tree('*',
+                tree('-', 10, 2),
+                3
+            ),
+            tree('/',
+                4,
+                tree('%',
+                    5 ,
+                    tree('+',
+                        tree('*', 2, 3),
+                        14
+                    )
+                )
+            )
+        )
+
+# Create another tree directly using object literal notation
+# This tree will have no methods.
+testtree2 = {
+        val   : '+'
+        left  : {
+            val  : '*'
+            left : {
+                val  : '-'
+                left : 10
+                right: 2
+            }
+            right: 3
+        }
+        right: {
+            val  : '/'
+            left : {
+                val: '+'
+                left: 10
+                right: 5
+            }
+            right: {
+                val  : '%'
+                left : 5
+                right: 6
+            }
+        }
+    }
+
+
+# A function to print a tree
+fn printtree (treeToPrint, depth) {
+    match treeToPrint
+    | [<IDictionary>] -> {
+        treeToPrint.left  |> printtree(depth+2) |> AddPass ' ' +
+        treeToPrint.right |> printTree(depth+2) |> AddPass ' ' +
+        ' ' * depth + treeToPrint.val + "\n"
+    }
+    | -> (' ' * depth + treeToPrint + "\n")
+}
+
+undef printTree2
+def printTree2 {:: left right val ::} depth {
+    printTree2 (left,  depth+2) |> AddPass ' ' +
+    printTree2 (right, depth+2) |> AddPass ' ' +
+    ' ' * depth + val + "\n"
+}
+def printTree2 value depth -> ' ' * depth + value + "\n"
+def printTree2 treeToPrint -> printTree2(treeToPrint, 0)
+
+# An expression-valued function to evaluate the tree
+fn TreeEval treeToEval ->
+    match treeToEval
+    | [<IDictionary>] -> {
+        v1 = treeeval(treeToEval.left)
+        v2 = treeeval(treeToEval.right)
+        op = treeToEval.val
+        match op
+        | '+' -> v1 + v2
+        | '-' -> v1 - v2
+        | '*' -> v1 * v2
+        | '/' -> v1 / v2
+        | '%' -> v1 % v2
+    }
+    | -> treeToEval as [<double>]
+
+# A function set to evaluate the tree
+undef TreeEval2
+def TreeEval2 {:: left right val:'+' ::} -> TreeEval2(left) + TreeEval2(right)
+def TreeEval2 {:: left right val:'-' ::} -> TreeEval2(left) - TreeEval2(right)
+def TreeEval2 {:: left right val:'*' ::} -> TreeEval2(left) * TreeEval2(right)
+def TreeEval2 {:: left right val:'/' ::} -> TreeEval2(left) / TreeEval2(right)
+def TreeEval2 {:: left right val:'%' ::} -> TreeEval2(left) % TreeEval2(right)
+def TreeEval2 treeToEval -> treeToEval as [<double>]
+
+suite 'Print_Tree_Tests' {
+
+    test 'PrintTreeFunction' {
+        test: {
+            (printtree(testtree1) /~ r/\s+/) |> SkipNullOrEmpty
+        }
+        expected: [10, 2, '-', 3, '*', 4, 5, 2, 3, '*', 14, '+',  '%', '/', '+' ]
+    }
+
+    test 'PrintTree2Function' {
+        test: {
+            (printtree2(testtree1) /~ r/\s+/) |> SkipNullOrEmpty
+        }
+        expected: [10, 2, '-', 3, '*', 4, 5, 2, 3, '*', 14, '+',  '%', '/', '+' ]
+    }
+
+    test 'PrintTreeMethod' {
+        test: {
+            (testtree1.Print() /~ r/\s+/) |> SkipNullOrEmpty
+        }
+        expected: [10, 2, '-', 3, '*', 4, 5, 2, 3, '*', 14, '+',  '%', '/', '+']
+    }
+
+    test 'TreeEvalFunction' {
+        test: {
+            treeeval(testtree1)
+        }
+        Expected: 24.8
+    }
+
+    test 'TreeEval2Function' {
+        test: {
+            treeeval2(testtree1)
+        }
+        Expected: 24.8
+    }
+
+    test 'TreeEvalMethod' {
+        test: {
+            testtree1.eval()
+        }
+        Expected: 24.8
+    }
+
+    test 'PrintSecondTreeWithPrintTree2' {
+        Test: {
+            (printtree2(testtree2) /~ r/\s+/) |> SkipNullOrEmpty
+        }
+        Expected: [10, 2, '-', 3, '*', 10, 5, '+', 5, 6, '%', '/', '+']
+    }
+}
+
+# Function set to compute the depth of a tree.
+undef depth
+def depth {:: left right val ::} -> 1 + utils.max(depth(left), depth(right))
+def depth _ -> 1
+
+# Suite to test a recursive routine that uses pattern matching
+# to figure out the depth of a tree.
+suite 'TreeDepth' {
+
+    test "Depth_of_tree" {
+        test: { depth(testtree1) }
+        expected: 6
+    }
+
+    test "Depth_of_tree2" {
+        test: { depth(testtree2) }
+        Expected: 4
+    }
+}
+
+

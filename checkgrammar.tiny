@@ -1,0 +1,186 @@
+####################################################################
+#
+# A Tiny script that validates the Tiny grammar embedded
+# in the 'tiny.ps1' file. It optionally returns a the parsed
+# grammar representation. The validations are limited to
+#  - each rule is only specified once
+#  - each rule only references things that are defined
+#  - each rule has a corresponding method defined on the Parser class
+#    (with an exclusions list.) 
+#
+# This script can be run stand alone but it is intended to be called 
+# by 'tinydoc' during documentation generation. 
+#
+####################################################################
+
+import 'utils'
+import 'IO'
+
+options = Utils.GetOpts('checkgrammar', args, {
+        returnRules: false
+        verbose: false
+    })
+
+if (options == null) {
+    return null
+}
+
+if (options.Verbose) {
+    println("Starting analysis.")
+}
+
+errorCount = 0
+stopWatch = Utils.NewStopWatch()
+stopWatch.Start()
+
+# Load the grammar as a single long string with comments removed.
+grammarText = 'tiny.ps1'
+        |> IO.ReadAllLines
+        |> matchall    r/^ *#G/
+        |> replace     r/^ *#G /
+        |> notmatchall r/^ *#/
+        |> replace     r/#.*$/
+        |> join ' '
+
+if (grammarText.Length == 0) {
+    error("The grammar text length was zero!")
+}
+
+if (options.Verbose) {
+    println("Grammar text loaded: {0} chars", grammarText.Length)
+}
+
+# A dictionary to store the parsed grammar rules.
+rules = [<Dictionary[string,object]>]
+            .new([<StringComparer>].OrdinalIgnoreCase);
+
+# Split the text on the terminal symbol ';;'
+grammarText
+    |> replace('\s+', ' ')
+    |> split ';;'
+    |> SkipNullOrEmpty
+    |> ForEach {
+        # split each string into tokens
+        elements = it |> split '\s+' |> SkipNullOrEmpty
+        # match the rule pattern name = bodyList
+        match (elements.AsList())
+        | element :: '=' :: elementValue -> {
+            if (rules :> element) {
+                error("element is defined twice: {0}\n\tCurrent Definition: {1}\n\tNew Definition: {2}",
+                    element, rules[element], elementValue)
+            }
+            rules[element] = elementValue
+        }
+        # Ignore empty lists and empty lists of lists, etc.
+        | [[]] | [] | '' | null -> null
+        | -> {
+            warn("String did not match the rule pattern: {0}", elements)
+        }
+     }
+
+if (getlength(rules) == 0) {
+    error('THe length of the list of rules was zero!')
+}
+
+if (options.Verbose) {
+    println("{0} rules extracted.", getlength(rules))
+    println("Step 1: Verifying that all elements have corresponding PowerShell [parser] methods.")
+}
+
+# grammar rules with no corresponding method on the Parser class.
+noCorrespondingMethod = {
+        BinaryOperator:     true
+        FunctionCall:       true
+        NumericLiteral:     true
+        StringLiteral:      true
+        RegexLiteral:       true
+        TypeLiteral:        true
+        Variable:           true
+        PropertyExpression: true
+        ArrayIndex:         true
+        MatchListStatement: true
+        BreakStatement:     true
+        ContinueStatement:  true
+        ReturnStatement:    true
+        ThrowStatement:     true
+    }
+
+
+# Make sure all root elements have corresponding methods on the Parser class.
+keys(rules)
+    |> foreach {
+        # BUGBUGBUG matchall should accept strings without explicitly turning them in regexes.
+        if (not ( [<Parser>] |> getmembers |> matchall(regex(format('{0}rule', it)) )) &&
+           noCorrespondingMethod !:> it) {
+            warn("Element '{0}' has no corresponding method on the [Parser] class ", it)
+            errorCount += 1
+        }
+    }
+
+if (options.Verbose) {
+    println("Complete.")
+    println("Step 2: Verifying that all rules have a body.")
+}
+
+# Make sure all of the rules have a body.
+rules
+    |> foreach {
+        if (not(it.Value)) {
+            warn("Rule '{0}' has no body")
+            errorCount += 1
+        }
+    }
+
+if (options.Verbose) {
+    println("Complete.")
+    println("Verifying that all elements referenced in rules are defined in the rule table.")
+}
+
+# Make sure all of the elements referenced in a rule
+# are actually defined in the table and that all rules
+# defined are referenced atleast once.
+references = {}
+rules
+    |> foreach {
+        references[it.Key] = 0
+    }
+
+# Check that all references are valid.
+rules
+    |> foreach {
+        ruleName  = it.Key
+        ruleValue = it.Value
+        foreach (val in ruleValue |> where {it ~ r/^[a-x]/ }) {
+            if (rules !:> val) {
+                warn("Rule '{0}' contains an undefined reference '{1}'",
+                    ruleName, val)
+                errorCount += 1
+            }
+            references[val] += 1
+        }
+    }
+
+# Make sure that every rule that was defined is referenced at least once
+# in a rule body.
+references
+    |> where { it.value == 0}
+    |> foreach {
+        warn("Rule {0} was never referenced in a rule body")
+    }
+
+if (options.Verbose) {
+    println("Complete.")
+}
+
+stopWatch.Stop()
+elapsedMilliseconds = stopWatch.Elapsed.TotalMilliseconds
+
+println("Grammar analysis is complete; number of errors: {0} duration {1} ms",
+            errorCount, elapsedMilliseconds)
+
+# If requested, return the parsed rules files.
+if (options.returnRules) {
+    return rules
+}
+
+

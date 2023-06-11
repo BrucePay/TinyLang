@@ -1,0 +1,31 @@
+##############################################
+#
+# Utilities for working with the web.
+#
+##############################################
+
+# Load the HTTP utility assembly
+[<System.Reflection.Assembly>]
+    .LoadWithPartialName("System.Web.HttpUtility") == null
+        then 
+            warn("Failed to load assembly 'System.Web.HttpUtility'")
+
+web = {
+
+    # Return text, encode for HTML
+    HtmlEncode:         [<System.Net.WebUtility>].HtmlEncode
+
+    HtmlDecode:         [<System.Net.WebUtility>].HtmlDecode
+
+    UrlEncode:          [<System.Net.WebUtility>].UrlEncode
+
+    UrlEncodeToBytes :  [<System.NET.WebUtility>].UrlEncodeToBytes
+
+    UrlDecode:          [<System.NET.WebUtility>].UrlDecode
+
+    UrlDecodeToBytes:   [<System.NET.WebUtility>].UrlDecodeToBytes
+
+    Iwr:                GetCommand('Invoke-WebRequest')
+}
+
+

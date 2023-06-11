@@ -1,0 +1,3639 @@
+<html>
+<head>
+<h1>
+The Tiny Programming Language</h1>
+
+<style>
+
+            body {
+                font-family: "Open Sans", Helvetica, Arial, Sans-Serif;
+            }
+            table {
+                border: 1px solid black;
+            }
+            th {
+                padding: 10px;
+                text-align: center;
+                background-color: #e0e0e0; 
+            }
+            td {
+                padding: 10px;
+                text-align: left;
+                vertical-align: top;
+            }
+            tr:nth-child(even) {background-color: #f2f2f2;}
+        
+</style>
+</head>
+<body>
+<p>
+Generated: 
+8/7/2022 2:18:15 PM
+</p>
+
+<h2>
+Introduction</h2>
+
+<p>
+Tiny is a small function-oriented imperative dynamic language
+            written entirely in PowerShell. It has both named and anonymous
+            functions (lambdas) which are used extensively in list processing.
+            Tiny also supports regular expression matching on strings and
+            generalized pattern matching on lists and properties. Patterns can
+            also be used in function parameters allowing multiple dispatch (multimethods).
+            Tiny is expression-oriented where the value of a list of statements
+            is the value of the last statement in the list. The syntax of Tiny
+            is largely a subset of C# but with a 'match' statement inspired by 
+<a href="https://fsharp.org/">F# (fsharp)</a>
+
+, lambda syntax inspired by 
+<a href="http://groovy-lang.org">Groovy</a>
+
+ and 
+<a href="https://kotlinlang.org">Kotlin</a>
+
+ and an object literal (dictionary) notation adopted from JavaScript
+            (In fact, a JSON file is a valid Tiny script).
+            Other influences include Poplog, Haskell, Elm and Elixir/Erlang.
+            The type system however, is essentially the unmodified PowerShell
+            "Extended Type System" (ETS).
+            Operator semantics are substantially informed by the host language 
+<a href="https://microsoft.com/powershell">PowerShell.</a>
+
+ The language and it's operators are case-insensitive by default but
+            case-sensitive operations can
+            be expressed using properly constructed regular expression literals. (see below.)
+</p>
+
+<p>
+
+            Tiny is implemented as a single monolithic PowerShell script.
+            To start the REPL, simply run './tiny.ps1' from inside a 
+           
+<a href="https://github.com/powershell/powershell">PowerShell 6 (Core)</a>
+
+session.
+</p>
+
+<h3>
+Documentation and Tests</h3>
+
+<p>
+
+            Much of the documentation, including the grammar for the language is embedded in
+            'tiny.ps1' as comments. The script ''tinydoc.tiny' will extract these comments and generate
+            an HTML page containing the documentation in ''Tiny Documentation.html''. To run the
+            script, start Tiny and do:
+            
+<pre>    run 'tinydoc' {browser:true}</pre>
+
+            This command will generate the HTML file and then open it in a browser window.
+            
+</p>
+
+<p>
+
+            Similarly, 'micro tests' (doc tests) are embedded in the implementing script as comments of the form:
+            
+<pre>    #T &lt;testName&gt; &lt;testText&gt;</pre>
+
+            In addition, the 'tests' subdirectory contains larger unit tests written in a Tiny DSL,
+            The script 'tinytest.tiny' will extract and run the micro tests as well as running
+            the unit tests in the 'tests' subdirectory. You can run this test from within Tiny as
+            follows:
+            
+<pre>    run 'tinytest' {force:true}</pre>
+
+            Specifying 'force:true' will cause the test driver to also build the documentation.
+            By default, 'tinytest' will run in quiet mode. To see all of the tests being run,
+            invoke the script with the 'verbose' option as follows:
+            
+<pre>    run 'tinytest' {verbose:true}</pre>
+</p>
+
+<h3>
+Examples</h3>
+
+<p>The following section provides a number of small examples illustrating the basic syntax and semantics of the Tiny language.</p>
+<table width="100%">
+<tr>
+<th>
+Description</th>
+
+<th>
+Example</th>
+
+<th>
+Notes</th>
+
+</tr>
+
+<tr>
+<td>
+Numeric Literals</td>
+
+<td><pre>123
+3.14
+22.006e16
+0xdeadbeef
+1_000_000_000.00</pre></td>
+<td>
+
+                    Numeric literals without a decimal point are parsed as integers. With a decimal point,
+                    they are parsed as doubles.  Hex values start with '0x' and are also integers.
+                    Numberic literals may optionally include the '_' character which is simply ignored.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+String Literals and Interpolation</td>
+
+<td><pre>"a double-quoted\nstring with escapes"
+'a single-quoted string'
+x = 1; "x is $x ${2+3}" == "x is 1 5"</pre></td>
+<td>
+
+                    Strings can have either single or double quotes.
+                    Escape sequences are processed in double-quoted strings but
+                    not in single-quoted strings. String interpolation is
+                    also done in double-quoted strings such that "$var" is replaced by the string
+                    value of variable "var" And "${expr}" is replaced by the result of the
+                    evaluating the expression between the braces.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+Regular Expression Literals</td>
+
+<td><pre>r/abc/c
+'abc' ~ r/abc/ == true
+'abc' ~ r/Abc/c == false
+'Abc' ~ r/Abc/c == true
+'[123]' ~ r/^.([0-9]+).$/;  matches[1] == '123'</pre></td>
+<td>
+
+                    Regular expression literals can be used with the regex operators or
+                    in list or property pattern matching.
+                    By default, all matches are case insensitive (default) but case sensitive
+                    matches can be done by adding the 'c' trailing option e.g.
+                    <pre>r/Abc/c</pre>
+                    Regular expression literals compile the regular expressions while
+                    the containing script is compiled so any syntax errors in a reguilar
+                    expression literal will be caught at script compile time. As is the
+                    case in PowerShell, a regular expression match sets a special variable
+                    'matches' to the string elements matches by the expression as shown
+                    in the last example in the examples box.
+                    Note: string interpolation is not done in regular expression literals.
+                    </td>
+
+</tr>
+
+<tr>
+<td>
+Variable and Function Names</td>
+
+<td><pre>aVariable
+a_variable
+a123
+a_function()
+_
+__a_var__</pre></td>
+<td>
+
+                    Variable, function or method names must start with a letter or '_'
+                    followed by any number of letters, numbers or underbars. Variables must be
+                    assigned before thay can be used otherwise an error will occur. The variables
+                    'null' and '_' are special in that anything assigned to them is discarded.
+                    '_' is commonly used in pattern matching as the 'dont't care' value. On the other
+                    hand, using 'null' in a pattern matches the literal value null i.e. the pattern match
+                    only succeeds if the corresponding value is null.
+               </td>
+
+</tr>
+
+<tr>
+<td>
+Pinned Variables</td>
+
+<td><pre>myvar = 'def'; ['abc', 'def'] ~ 'abc'::^myvar;
+
+[1, 2, 2, 1] ~ [a, b, ^b, ^a] # match a palindrome
+
+fn startswith list val -> list ~ ^val::_
+
+</pre></td>
+<td>
+
+                    Pinned variables (adapted from Elixir) are a special case of variables.
+                    A pinned variable name starts with the '^' character e.g. '^myVar'. In
+                    normal script contexts, a pinned variable is the same as a regular variable
+                    i.e. '^abc' and 'abc' refer to exactly the same variable
+                    However in list patterns they serve a special purpose. In list patterns, variables
+                    are normally bound as part of the matching process. In other words, the
+                    corresponding list element is assigned to the variable. However with
+                    pinned variables, the variable's value is used in the matching process
+                    instead of the variable being bound.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+List Literal and the Range Operator</td>
+
+<td><pre>[1, 2, 3, [4, 5], 10 .. 20];
+[1, 2, 1..5..2, 5, 6] == [1, 2, 1, 3, 5, 5, 6];
+[1, [2..5], 6] == [1, [2,3,4,5], 6]</pre></td>
+<td>
+
+                    Syntactically, list (array) literals are surrounded by square brackets -
+                    '[' and ']' - and the individual elements of the list are separated by commas (',').
+                    List elements can take any value expression as an element. Nested lists can also
+                    be specified. The range operator '..' can be used in-line with an array literal.
+                    In that case, the list produced by the operator is merged into the containing list.
+                    The range operator can also be used in nested lists. List patterns can be used
+                    to destructure list.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+Object (Hashtable) Literals</td>
+
+<td><pre>{a:1 'key with space':2+2 c:"hi"};
+
+{a : foreach(i in 1..10) { i }};
+
+o = {v:2 method:{x -> this.v * x}};
+o.method(5) == 10
+{} # empty object, NOT a empty lambda</pre></td>
+<td>
+
+                    Object literals are implemented as hashtables. Keys can be variable names or strings (but not
+                    general expressions). Values can be expressions of single statements. If the value associated with
+                    a key is a lambda then it can be invoked as a method using paretheses e.g. 'obj.method()'.
+                    WHen invoked in this way, the containing object is available to the method body in
+                    the 'this' variable. Members can be accessed with either array notation 'hashvar["a"]' or
+                    property notation 'a.a'. If the value associated with the member is a lambda, then it will be
+                    executed like a method: 'o.method(5)'.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+Unary Operators</td>
+
+<td><pre>true == ! false
+
+! 0 == false
+
+a = 13; -a == -13
+
++[1..10] == 55
++ ['a', 'b', 'c'] == 'abc'</pre></td>
+<td>
+
+                    As well as unary casts, Tiny has three other unary operators: '!' (boolean not),
+                     '-' (unary minus) and '+' (unary plus). Unary plus is interesting: when
+                    applied to a list of values, it will sum those values as shown in the examples column.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+Arithmetic Operators</td>
+
+<td><pre>2+2
+'hi' + 'There'
+10 * 3
+16 / 6
+9 % 2
+[1..100] / 20</pre></td>
+<td>
+
+                    Tiny has the usual set of arithmetic operators: '+', '-', '*', '.', '/' and '%'.
+                    Operators work on numbers, strings and arrays with conventional precedence rules.
+                    '+' adds numbers and concatenates arrays and strings.
+                    Dividing an array by a number will split the array into number
+                    sized pieces. See the operators section for more details on semantics and 
+                    the complete list of operators.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+Assignment Operators</td>
+
+<td><pre>a = b = c = 2;
+a += 3;
+a -= 3
+a *= 10
+a /= 5</pre></td>
+<td>
+
+                    Tiny provides simple and compound assignment operators. Simple assignment can be used
+                    to initialize a number of variables in a single statement.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+Operators and Coercions</td>
+
+<td><pre>2 + 2 == 4
+2 + '2' == 4
+'2' + 2 == '22'
+[1] + 2 == [1, 2]
+1 + [2] == [1, 2]</pre></td>
+<td>
+
+                    Because Tiny operators use the PowerShell operators (mostly), it inherits PowerShell's
+                    behavior around type conversions. The left-hand rule generally applies: the type of the left
+                    hand operand determines the type of the overall expression. However, with pure numeric operations,
+                    the overall type of the expression is the that of the more precisely typed operand. Consequently
+                    adding a double and an int will result in a double regardless of which side is which.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+Type Literals</td>
+
+<td><pre>1 is [&lt;int&gt;]
+[&lt;System.Diagnostics.StopWatch&gt;].New()
+'abc' is [&lt;System.Collections.IEnumerable&gt;]</pre></td>
+<td>
+
+                    Type literals use PowerShell's string-to-type conversion which includes
+                    the default type accelerators as well as any namespaces in-scope in the implementing
+                    script.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+Type Casts</td>
+
+<td><pre>[&lt;int&gt;] '123' is [&lt;int&gt;]
+[&lt;double&gt;] (2 * 3)</pre></td>
+<td>
+
+                    Type casts use type literals as unary operators, converting the argument
+                    value to the target type via PowerShell's conversion logic. This means that:
+                    <pre>[&lt;int&gt;] "123"</pre>
+                    succeeds and returns an integer. On the otherhand
+                    <pre>[&lt;int&gt;] "abc"</pre>
+                    results in an error. Casts can also be composed as follows:
+                    <pre>[&lt;int&gt;] [&lt;char&gt;] "a" == 97</pre>
+                    In this example, the first character of the string is turned into
+                    a character and then into the integer '97'.
+                    </td>
+
+</tr>
+
+<tr>
+<td>
+Regular Expression Operators</td>
+
+<td><pre>strToMatch ~ regex
+
+strToReplace -~ pattern
+
+strToSplit /~ regex
+
+strToMatchAll *~ regex</pre></td>
+<td>
+
+                    Tiny has the full set of regular expression operators: match (~), replace (-~),
+                    split (/~) and match all (*~) which returns all matches in the target string.
+                    Matching is done case-insensitively in the invariant locale unless a regex
+                    literal with the 'c' option is used e.g,
+                    <pre>'abc' ~ r/Abc/c == false</pre></td>
+
+</tr>
+
+<tr>
+<td>
+Spaces and Semicolons</td>
+
+<td>
+<pre>
+# one expression - assigns result of a fn call
+foo = bar {'Hi there'}
+
+# two expressions - variable assignment + lambda
+foo = bar; {'Hi there'}
+
+# one expression - assign result of array index
+foo = bar [2]
+
+# two expressions - assignment + array literal
+foo = bar; [2]
+
+# One expression - assignment + cast
+foo = [&lt;int&gt;] '123'
+
+# Two expressions - assign type literal + string value
+foo = [&lt;int&gt;]; '123'
+</pre></td>
+
+<td>
+
+                    Tiny syntax is very free form. Semicolons are permitted between statements
+                    but are usually not required.
+                    For example, the following:
+                    <pre>2+2 3*4 myfunc(2,3)</pre>
+                    contains three distinct expressions without the use of semicolons. However semicolons
+                    are needed in some cases such as those shown in the examples column.
+                    </td>
+
+</tr>
+
+<tr>
+<td>
+Function Invocation</td>
+
+<td><pre>
+foo('abc', 12)
+
+foo {it > 2}
+
+foo {a: 1 b:2}
+
+println 'Hello'
+doit ('bob') {a:1 b:2}
+count 'abc' + 3</pre></td>
+<td>
+
+                    In general, functions are invoked fairly conventionally with parentheses surrounding
+                    the function arguments. However with special invocation, the function takes a single
+                    argument that must be a lambda literal, object literal or string literal.
+                    Parenthetical or string literal invocations may optionally be followed by
+                    an object or lambda literal. If this is the case, the extra argument is available
+                    inside the body of the function in the 'body' variable.
+                    Special invocation forms are used in creating DSLs. See the Functions section
+                    for a list of built-in functions.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+Functions as infix operators</td>
+
+<td><pre>fn avg x y -> (x+y)/2
+2 `avg` 3 == 2.5</pre></td>
+<td>
+
+                    Like Haskell, Tiny allows you to invoke any function taking two arguments
+                    as an infix (binary) operaor by surrounding the function name with
+                    backticks (`). All functions invoked this way
+                    share the same precedence which is the same as the precedence of
+                    the range operator ('..').
+                </td>
+
+</tr>
+
+<tr>
+<td>
+Pattern Matching with List Patterns</td>
+
+<td><pre>
+a::b::c::_ = [1,2,3];
+
+['foo','bob','smith'] ~ 'foo'::{it == 'bob'}::var;
+
+[1, [20, [300]]] ~ a::[b::[c::_]::_]::_ </pre></td>
+<td>
+
+                    Where regular expressions are used to match strings, list patterns are used to match
+                    lists.  List patterns are composed of variables, which capture values, and
+                    literals such as strings, numbers, etc that must be present in the target
+                    list. Pattern elements are separated by the '::' operator. If a pattern
+                    element is a lambda, that pattern will be evaluate to see if it matches using
+                    the 'It' default variable. If the last element in the pattern is a variable,
+                    it will have an array value even if the number of elements in the pattern is
+                    the same as the number of elements in the target.
+                    This is to facillitate certain recursive matching patterns.
+                    If you want to ensure a scalar value in the element, you must add an extra
+                    pattern element '_' which will succeed in the match and
+                    be bound to an empty array. For example, in the following,
+                    <pre>[1, 2] ~ a::b::_ ; (b is [&lt;int&gt;]) == true && b == 2</pre>
+                    'b' will be bound to the scalar value 2.
+                    </td>
+
+</tr>
+
+<tr>
+<td>
+Pattern Matching with Property Patterns</td>
+
+<td><pre>
+{:: a:1 b:b c: r/[a-z]/ ::}</pre></td>
+<td>
+
+                    As well as regular expressions and list patterns, Tiny supports a third kind
+                    of pattern - property patterns - which are used to match against the properties
+                    on objects (or dictionaries). Property patterns can contain the same pattern elements 
+                    as list patterns. The significant difference is that Property Patterns also allow you
+                    to specify the name of the property to catch as a variable:
+                    '&lt;name&gt;[:&lt;valueToMatch&gt;]'.
+                    So a pattern element 'a' will simply capture the value of the property 'a' in a
+                    variable called 'a'. A pattern element with a name and a regular expression value
+                    like 'a:/r[0-9]' will match the value in the property 'a' only if that value matches
+                    the regular expression. Property patterns work both against dictionary members
+                    and object properties.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+The 'if' Statement</td>
+
+<td><pre>if (x > 15) {
+    println 'Greater'
+}
+elseif (x< 10) {
+    println 'Smaller'
+}
+else {
+    println 'Ok'
+}
+
+myvar = if (x % 2 == 0) { 'even' } else { 'odd' }
+</pre></td>
+<td>
+
+                    For Tiny control statements (if/while/foreach), both the parentheses and braces are required.
+                    In the 'if' statement, additional cases are handled with 'elseif' clauses. All Tiny 
+                    control statements, including 'if' statements are expressions with values that can be
+                    assigned to variables. (Note that in many cases, it may be preferrable to use the 'match'
+                    statement instead of 'if' for reasons of simplicitly and clarity of code.)
+                </td>
+
+</tr>
+
+<tr>
+<td>
+The 'while' Statement</td>
+
+<td><pre>
+i=0
+while (i < 0) {
+     println('I is {0}', i)
+    i += 1
+}
+i = 0
+
+list = while (i<10) { i += 1; i}
+list == [1 .. 10]</pre></td>
+<td>
+
+                    The 'while' statement is also expression valued with the result being the result of the
+                    statement in the statement list aggregated over the iterations. The second of the provided
+                    examples shows how to generate a list of values with a while statement.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+The 'foreach' statement</td>
+
+<td><pre>foreach (i in [1 .. 10]) {
+    println('i is ' + i)
+}
+
+(foreach (i in 1..5) { i*2 }) == [2,4,6,8,10]</pre></td>
+<td>
+
+                    The 'foreach' statement iterates over a list of items, executing the statement
+                    body once for each item. As always, the value of the foreach statement (expression)
+                    is the value of the last statement in the body. This value is aggregated for all
+                    iterations and returned as a collection as illustrated in the second example.
+                    If the last statement in the block doesn't emit a value, then the overall value
+                    of the 'foreach' statement will be null.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+The 'match' statement</td>
+
+<td><pre>match value
+| 1 -> 'one'
+| r/[a-z]/ -> 'a letter'
+| {isnumber(it) && it % 2 == 0} -> 'even'
+| -> 'default'</pre></td>
+<td>
+
+                    The match statement matches a value against a set of pattern/action clauses.
+                    A clause begins with the or bar '|' followed by the pattern expression then an
+                    arrow '-&gt;' and finally the action. There can be multiple patterns in
+                    a clause which must be separated by the or bar '|'.
+                    The first pattern that matches triggers the associated action which returns
+                    it's value. Patterns can be literal values such as strings or integers,
+                    regular expressions in which case a regex match is done, Tiny
+                    patterns (e.g. 'a::b::c') in which case pattern matching is done or lambdas.
+                    If the pattern is a lambda, the value being tested is available in the body
+                    of the lambda in the 'it' variable.
+                    Actions can be single expressions (including a single statement) or
+                    a lambda which is executed rather than returned.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+The 'matchlist' statement</td>
+
+<td><pre>input =  [['a', 2], ['b', 3], ['a', 3], ['c', 4]]
+ehs = matchlist input| 'a'::n::_ -> n
+ehs.Sum() == 5</pre></td>
+<td>
+
+                    The 'matchlist' statement behaves exactly like the 'match' statement
+                    except it iterates over the value to test. This allows you to match
+                    against a list of lists using pattern matching
+                    in a very concise way. The 'matchist' statement returns a list
+                    containing the result of all actions that have been executed. If
+                    no actions execute, then it will return an empty list.
+                    In the example shown,  'matchlist' iterates over
+                    the list of lists, extracting
+                    the second element from each candidate list where the first element is 'a'.
+                    The results are aggregated into the
+                    variable 'ehs' and then summed to produce 5.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+The try/catch/finally Statement</td>
+
+<td><pre>try {
+    1/0
+}
+catch {
+ println("exception was $it")
+}
+finally {
+    println('Done')
+}
+</pre></td>
+<td>
+
+                    Like many languages, Tiny uses exceptions for error handling and so has
+                    the conventional try/catch/finally statement. A current limitation in the language
+                    is that you cannot specify the type of exception to catch. (Internally all Tiny
+                    exceptions are of type [&lt;TinyException&gt;] anyway so it doesn't really matter).
+                    The actual exception instance is available in the 'catch' body through
+                    the 'it' variable.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+The 'return' Statement</td>
+
+<td><pre>fn foo {1; return 12; 2} foo() == 12</pre></td>
+<td>
+
+                    Normally the return value from a function is the value of the last statement executed.
+                    The return statement allows you to return a value from anywhere in a function
+                    by exiting a function body early. This also applies to lambdas with the 
+                    special case that return, when used in a lambda that is invoked with the <b>Invoke()</b>
+                    method will exit both the lambda and the calling function. This allows for block-like
+                    return behavior in functions that take lambda arguments.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+The 'break' Statement</td>
+
+<td><pre>while (true) { break }</pre></td>
+<td>
+
+                    BUGBUGBUGBUG TBD
+                </td>
+
+</tr>
+
+<tr>
+<td>
+The 'continue' Statement</td>
+
+<td><pre>foreach (i in 1..10) { continue }</pre></td>
+<td>
+
+                    BUGBUGBUGBUG TBD
+                </td>
+
+</tr>
+
+<tr>
+<td>
+Basic Function Definitions</td>
+
+<td>
+<pre>fn foo (x, y) {
+    println('x=' + x + ' y=' + y)
+    x+y
+}</pre></td>
+
+<td>
+
+                    The return value of a function is the value of the last statement executed
+                    but the return statement can optionally used.
+                    Semicolons are permitted between statements but are rarely required.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+"Relaxed" Function Definition</td>
+
+<td>
+<pre>fn foo x y {
+    println('x=' + x + ' y=' +y)
+    x+y
+}</pre></td>
+
+<td>
+
+                    Parentheses around and commas between parameters can be omitted in function
+                    definitions allowing for a 'relaxed' style that can be more readable.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+Expression-bodied Functions.</td>
+
+<td><pre>fn plus x y -> x+y   # fn to add 2 numbers
+
+# Returns true if the number is even
+fn even n ->
+    if (n % 2 == 0) { true }
+    else {false}
+
+# Returns a new hashtable
+fn returnsAHash f l -> {
+    FirstName: f
+    LastName: l
+}
+</pre></td>
+<td>
+
+                    In expression-bodied functions, the body of the function is a single expression following
+                    the '->' (It can also be a statement. As always, the result of the function is the result
+                    of the last statement returned.) Note that a lambda specified after the '->' is treated as
+                    the value to return not as the body of the function, This is different from the behaviour of
+                    '-> { ... }' in a match statement where the lambda is treated as the body of the function.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+Parameter Patterns</td>
+
+<td><pre>fn foo [&lt;int&gt;] n -&gt; 'n is an int'
+fn foo 1               -&gt; 'One'
+fn isaNum r/[0-9]+/    -&gt; true
+fn hd x::_             -&gt; x
+fn tl _::xs            -&gt; xs
+</pre></td>
+<td>
+
+                    As well as variables to bind, functions may also use "parameter patterns" which are
+                    largely similar to patterns in the match statement. A parameter pattern can be as simple as
+                    a type constraint on a parameter or it could be a literal value, a regex, a TinyList
+                    or property pattern literal. If the parameter match succeeds, the function body is evaluated.
+                    If the parameter match fails, then an error is raised. See "function sets" for an alternative
+                    to this error behaviour.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+Function Sets and Parameter Patterns (Multiple Dispatch))</td>
+
+<td><pre>def fib 0 -> 1
+def fib 1 -> 1
+def fib n -> fib(n-1)+fib(n-2)</pre></td>
+<td>
+<p>Tiny functions can be defined in 'sets' using the 'def' keyword.This is a generalization of method overloads in object-oriented programming.When this keyword is used, the function definitions are aggregated rather thanreplaced. This, along with pattern matching in parameter specifications, allowsyou to avoid explicit conditional logic in many cases. In the example shown,there are three definitions - two that match constant values and a third thathandles the normal case of generating the Fibonocci sequence. </p><p>Function sets are matched in order,stopping after the first successful parameter match. Note that subnsequent'def's continue to accumulate until the definition is remove. This can bedone using the 'undef' statement.Arity or number of parameters, is also significant to in function selection.Two functions with the same name but differentarity are considered different functions in a function set.(Another term used to describe this feature is 'multimethods' or 'multiple dispatch'.)</p></td>
+
+</tr>
+
+<tr>
+<td>
+The 'undef' statement</td>
+
+<td><pre>undef zork</pre></td>
+<td>
+
+                    The 'undef' keyword allows you to undefine a variable or function definition
+                    at parse time rather than at run time. Since functions are bound at parse time,
+                    this statement is most useful for dealing with functions, particularily
+                    with function sets defined with the 'def' keyword. Since 'def' functions are always
+                    added to the existing function set, you need a way to remove the current function set definition
+                    before rebinding them. The 'undef' statement will do this.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+Functions, Memoization and '_me'</td>
+
+<td><pre>
+def fact 0 -> 1
+def   fact n ->
+	if (_me.IsMemoized(n))
+		{ _me.GetMemoized(n) }
+	else
+		{ _me.Memoize(n, n * fact(n-1)) }
+
+fact |> foreach { it.ClearMemoized() }
+
+def fib 0 -> 1
+def fib 1 -> 1
+# Use overload that takes a computation (lambda) instead of a value
+def fib n -> _me.Memoize(n, {fib(n-1) + fib(n-2)})</pre></td>
+<td>
+
+                    Memoization is a technique whereby future computations can be sped up by reusing previous 
+                    computations. In Tiny, to facillitate this, each function or lambda has an optional
+                    'memo table' associated with it. This memo table (or rather methods for accessing this
+                    storage table) are available on the lambda itself. The lambda object is available inside the lambda body
+                    through the variable '_me'. The memoization method set consists of four methods+2 overloads:
+                    <pre>    _me.IsMemoized(object)  # Returns true if the object has been memoized</pre>
+                    <pre>    _me.GetMemoized(object), _me.GetMemoized() # return the whole table</pre>
+                    <pre>    _me.Memoize(object, value), _me.Memoize(object, {...}) # Get the memoized value</pre>
+                    <pre>    _me.ClearMemoize() # Clear the memo table for a lambda.</pre>
+                    The memo table is created the first time an object/value pair is memoized. The code
+                    in the example column shows the canonical patterns for using these methods.
+                    The example using the overload of Memoize() that takes a lambda representing the
+                    computation is the simplest pattern but has the additional overhead of a second
+                    lambda dispatch.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+Example: Recursive Fibinocci function using the 'match' statement.</td>
+
+<td>
+<pre>
+fn fib n ->
+    match x
+    | 0 -> 1
+    | 1 -> 1
+    | -> fib(n-1) + fib(n-2)
+</pre></td>
+
+<td>
+
+                    The match statement matches its argument against the values in each of the case clauses.
+                    Match elements can be literal strings or numbers, types (in which case the target objects type is
+                    matched), regular expressions or lambdas. The associated actions can be expressions or statements.
+                    The default clause is indicated by including no match expression. The result value is the result
+                    of executing the action for the matching clause.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+Example: Recursive function set to compute the length of a list.</td>
+
+<td>
+<pre>
+fn len list ->
+    match list
+    | [] -> 0
+    |  _::tail -> 1 + len(tail)
+</pre></td>
+
+<td>
+
+                    While this is an extremely inefficient way to get the length of the list, it illustrates
+                    the use of pattern matching with lists in the 'match' statement.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+Example: Recursive function set to compute the length of a list using parameter patterns.</td>
+
+<td><pre>def len [] -> 0
+def len _::tail -> 1 + len(tail)</pre></td>
+<td>
+
+                    As with the previous example, this is another inefficient way to get the
+                    length of the list.  This example illustrates the use of parameter patterns
+                    in deconstructing lists. The first 'def' handles the empty-list case
+                    and returns 0. The second 'def' handles the non-empty list case,
+                    using '_' to match the head of the list (since we don't care what
+                    it is, only that it exists) and 'tail' to capture the rest of the
+                    list. It adds 1 to the result of calling
+                    'len' on the list tail giving the length of the overall list.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+Variable and Function Scopes</td>
+
+<td>
+<pre>__global.AGlobalVariable = 123
+
+__parent.AVariableInTheParentScope = 456
+x = 123; __current.X = x</pre></td>
+
+<td>
+
+                    Tiny currently uses dynamic scoping just like PowerShell: variables are inherited
+                    from the caller's scope, variable writes are always done in the local scope.
+                    Variables must assigned before they can be used. The current, global and parent scopes
+                    are accessible through the variables '__current', '__global' and '__parent'.
+                    Functions are bound in the same namespace an regular variables. In fact, a function
+                    is simply a variable containing an 'invokable'
+                    object such as a Tiny lambda, a MethodInfo object or a PowerShell scriptblock so
+                    a function definition such as:
+                    <pre>fn add x y -> x+y</pre>
+                    is essentially the same as:
+                    <pre>add = {x, y -> x+y}</pre>
+                    except that functions bound with the 'fn' keyword are bound at parse time 
+                    whereas assignment occurs at runtime.
+                    </td>
+
+</tr>
+
+<tr>
+<td>
+Lambda Literals</td>
+
+<td>
+<pre>
+{x, y -> println('x={0} y={1}', x, y); x+y}
+
+[1..10].reduce {x, y -> x+y}
+
+[1..10].map {it * 2}
+
+{x, y -> x * y}(2, 3) == 6
+
+{it * it2}(3, 4) == 12</pre></td>
+
+<td>
+
+                    Tiny lambda syntax is inspired by Kotlin including the use of the automatic 'It'
+                    (and 'It2') variables.
+                    Lambda bodies may contain multiple statements and the return value of the lambda
+                    is the result of the last statement executed. Lambdas are most frequently used with
+                    list operators like where, map, flatmap, reduce etc. (See the list operation table
+                    below.)
+                    Note 1: that Tiny lambdas are not (currently) closures.
+                    Note 2: Tiny lambdas are implemented by the PowerShell class TinyLambda.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+Example: Lambdas and the 'match' Statement</td>
+
+<td><pre>fn myMap list lambda ->
+    match list
+    | [] -> []
+    | h::t -> lambda(h) + mymap(t, lambda)
+
+myMap([1,2,3], {n -> n * 2}) == [2, 4, 6]</pre></td>
+<td>
+
+                    This example is a recursive implementation of the 'map()' function which takes
+                    a list and a lambda, applies the lambda to each item and then returns the
+                    resulting list of values generated by the lambda.
+                </td>
+
+</tr>
+
+<tr>
+<td>
+Implementing the merge sort algorithm</td>
+
+<td><pre>def merge [] xs         -&gt; xs
+def merge xs []         -&gt; xs
+def merge x::xs y::ys   -&gt;
+       if (x &gt; y) {y :+ merge(x :+ xs, ys)}
+       else       {x :+ merge(xs, y :+ ys)}
+
+def mergesort1 []        -&gt; []
+def mergesort1 x::[]     -&gt; [x]
+def mergesort1 x::y::[]  -&gt; x `merge` y
+def mergesort1 x::y::z   -&gt;
+       x `merge` y `merge` mergesort1(z)
+
+fn mergesort list -&gt; mergesort1(list / 1)
+</pre></td>
+<td>
+
+                    This example shows a recursive version of the classic merge sort algorithm
+                    using function sets and parameter patterns to decompose the list to sort.
+                </td>
+
+</tr>
+
+
+</table>
+
+<h2>
+The Tiny Operators</h2>
+
+<p>
+
+            The following table lists all of the binary operators in the Tiny
+            language in precedence order, low to high. There are three unary
+            operators '-' (minus), '!' (boolean not) and casts like
+            <pre>    [&lt;int&gt;] "123"</pre>. 
+            Casts use PowerShell casting semantics so a string containing only digits
+            can be cast into an integer whereas casting a non-digit string like 'abc'
+            will result in an error.
+            
+</p>
+
+<table width="100%">
+<tr>
+<th>
+<b>Operator</b></th>
+
+<th>
+<b>Prec</b></th>
+
+<th>
+<b>Description</b></th>
+
+</tr>
+
+<tr>
+<td>
+<b>&amp;&amp;</b></td>
+
+<td>
+2</td>
+
+<td>
+Logical and; PowerShell truthy conversions are used; evaluation is short-circuited  e.g. <pre>function(1) && function(2)</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>||</b></td>
+
+<td>
+2</td>
+
+<td>
+Logical or; PowerShell truthy conversions are used e.g. <pre>function(1) || function(2)</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>then</b></td>
+
+<td>
+2</td>
+
+<td>
+The conditional evaluation operator - if the LHS evaluates to true, the RHS is evaluated and that value is returned; if not then null is returned. If the RHS is a lambda, it is evaluated with the LHS value available in ''It''  e.g. <pre>"N is 1234" ~ '([0-9]+)' then matches[1]</pre> returns 1234.And <pre>6/2 then {"It is " + it}</pre> returns "It is 3".</td>
+
+</tr>
+
+<tr>
+<td>
+<b>do</b></td>
+
+<td>
+2</td>
+
+<td>
+The expression sequencing operator. This operaotr evaluates the LHS, discards the result, then returns the result of evaluating the RHS. e.g. <pre>1 do 2 do 3 == 3</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>+=</b></td>
+
+<td>
+2</td>
+
+<td>
+The plus-assign operator e.g. <pre> a = 1; a += 1; a == 2</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>-=</b></td>
+
+<td>
+2</td>
+
+<td>
+The minus-assign operator. Works on numbers, strings and arrays e.g. <pre> a = 5; a -= 2; a == 3</pre><pre> a = [1, 2, 3]; a -= 2; a == [1, 3]</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>*=</b></td>
+
+<td>
+2</td>
+
+<td>
+The times-assign operator. Like the times operator, it works on numbers, strings and lists e.g. <pre> a = 2; a *= 3; a == 6</pre><pre>a = 'a'; a *= 3; a == 'aaa'</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>/=</b></td>
+
+<td>
+2</td>
+
+<td>
+The divide-assign operator, Like the / operator this works on number and arrayse.g. <pre> a = 12; a /= 3; a == 4</pre><pre>a = [1,2,3,4,5]; a /= 2; a == [[1, 2], [3, 4], [5]]<pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>?=</b></td>
+
+<td>
+2</td>
+
+<td>
+do the assignment only if the variable is null (or does not exist) e.g. <pre> a ?= 123 </pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>=</b></td>
+
+<td>
+2</td>
+
+<td>
+basic assignment; can have patterns on the LHS; can chain assignments e.g. <pre>a = 1</pre><pre>a::b::_ = [1, 2]</pre><pre>a = b = c = 3</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>is</b></td>
+
+<td>
+3</td>
+
+<td>
+The type comparison operator; checks to see if the LHS is of the type on the RHS e.g. <pre>3.14 is [<double>]</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>isnot</b></td>
+
+<td>
+3</td>
+
+<td>
+The not type comparison operator; checks to see if the LHS is not of the type on the RHS e.g. <pre>3.14 isnot [<string>]</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>as</b></td>
+
+<td>
+3</td>
+
+<td>
+The type conversion operator; converts the LHS to an object of type specified by the RHS e.g. <pre>"123" as [<int>]</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>&lt;</b></td>
+
+<td>
+4</td>
+
+<td>
+See if LHS is less than the RHS e.g. <pre>5 &lt; 10</pre><pre>"abc" &lt; "abcd"</pre><pre>[1,2,3] &lt; [4,5,6]</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>&gt;</b></td>
+
+<td>
+4</td>
+
+<td>
+See if LHS is greater than the RHS; works with any comparable object; lists are compared by value not reference</td>
+
+</tr>
+
+<tr>
+<td>
+<b>&lt;=</b></td>
+
+<td>
+4</td>
+
+<td>
+See if LHS is less than or equals to the RHS; PowerShell coersion rules are used</td>
+
+</tr>
+
+<tr>
+<td>
+<b>&gt;=</b></td>
+
+<td>
+4</td>
+
+<td>
+see if LHS is greater than or equal to the RHS</td>
+
+</tr>
+
+<tr>
+<td>
+<b>==</b></td>
+
+<td>
+4</td>
+
+<td>
+See if the two sides are equal; lists are compared by value e.g. <pre>2 == 2</pre><pre>'abc' == 'abc'</pre><pre>[1, 2, 3] == [1, 2, 3]</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>!=</b></td>
+
+<td>
+4</td>
+
+<td>
+See if the two sides are not equal e.g. <pre>[1, 2, 3] != [4, 5, 6]</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>~</b></td>
+
+<td>
+4</td>
+
+<td>
+Regular expression or pattern match operator; returns true if the pattern matches; for regex matches, the 'matches' variable is set; does not iterate over lists <pre>'abc' ~ '[ac]'</pre> <pre>[1,2,3,4] ~ (1::a::{it > 2}::b)</pre> returns true and sets 'a' to 1 and 'b' to 4</td>
+
+</tr>
+
+<tr>
+<td>
+<b>!~</b></td>
+
+<td>
+4</td>
+
+<td>
+The regex notmatch operator</td>
+
+</tr>
+
+<tr>
+<td>
+<b>/~</b></td>
+
+<td>
+4</td>
+
+<td>
+The regex split operator e.g. <pre>"a b c" /~ ' '</pre> results in <pre>['a', 'b', 'c']</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>-~</b></td>
+
+<td>
+4</td>
+
+<td>
+The regex replace operator, sets the Matches variable e.g. <pre>"abcd" -~ '[bc]'</pre> results in <pre>'ad'</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>*~</b></td>
+
+<td>
+4</td>
+
+<td>
+The regex 'all matches' operator. This operator returns MatchInfo objects for all matches in a string <pre>'abc' *~ '[abc]+'</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>:&gt;</b></td>
+
+<td>
+4</td>
+
+<td>
+The contains operator (the list to check for containment is on LHS); if the LHS is a dictionary, the keys are checked  e.g. <pre> [1,2,3,4,5] :> 3</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>&lt;:</b></td>
+
+<td>
+4</td>
+
+<td>
+The in operator (the list to check is on RHS) e.g. <pre>5 &lt;: [1 .. 10]</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>!:&gt;</b></td>
+
+<td>
+4</td>
+
+<td>
+The not contains operator e.g. <pre>[1,2,3,4,5] !:&gt; 10</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>!&lt;:</b></td>
+
+<td>
+4</td>
+
+<td>
+The not in operator e.g. <pre> 10 !&lt;: [1, 2 .. 5, 6]</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>??</b></td>
+
+<td>
+4</td>
+
+<td>
+The null coalescing operator; if the result of evaluating LHS is not null then it is returned otherwise the result of evaluating the RHS is returned e.g. <pre>var = null ?? 'it was null'</pre> set 'var' to 'it was null'</td>
+
+</tr>
+
+<tr>
+<td>
+<b>..</b></td>
+
+<td>
+5</td>
+
+<td>
+range operator (lower .. upper [.. step]); usually used in an array literal e.g. <pre>[1 .. 10]</pre> <pre>[0 .. 10 .. 2]</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>+</b></td>
+
+<td>
+6</td>
+
+<td>
+The addition operator; PowerShell semantics; strings and arrays are concatenated e.g. <pre>"a string " + 1234</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>-</b></td>
+
+<td>
+6</td>
+
+<td>
+The subtraction operator; PowerShell semantics plus it works on arrays to remove elements and strings to remove patterns e.g. <pre>10 - 5</pre> <pre>[1,2,3,4] - [2,4]</pre> returns [1,3]</td>
+
+</tr>
+
+<tr>
+<td>
+<b>*</b></td>
+
+<td>
+8</td>
+
+<td>
+The multiplication operator; PowerShell semantics e.g. <pre>10*3</pre> <pre>"*" * 10</pre>results in a string of 10 '*' <pre>[1,2,3] * 5</pre> returns a new list that repeats the original list 5 times</td>
+
+</tr>
+
+<tr>
+<td>
+<b>/</b></td>
+
+<td>
+8</td>
+
+<td>
+The division operator (works on arrays - it partitions them) e.g. <pre> 10 / 2 </pre> <pre>[1 .. 10] / 3</pre> results in [[1,2,3], [4,5,6], [7,8,9], 10]</td>
+
+</tr>
+
+<tr>
+<td>
+<b>%</b></td>
+
+<td>
+8</td>
+
+<td>
+The modulus operator</td>
+
+</tr>
+
+<tr>
+<td>
+<b>**</b></td>
+
+<td>
+10</td>
+
+<td>
+exponentiation operator e.g. <pre>2 ** 10</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>-f</b></td>
+
+<td>
+10</td>
+
+<td>
+Format operator like PowerShell's e.g.<pre> "first {0} second {0}" -f [1, 2]</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>|&gt;</b></td>
+
+<td>
+11</td>
+
+<td>
+The pipe operator - applies a sequence of functions to a value e.g. <pre>[1..100] |&gt; match('^2') |&gt; sum() |&gt; sqrt() |&gt; floor() == 15</pre><pre>9 |&gt;[<System.Math>].Sqrt() == 3</pre><pre>16 |&gt; [<math>].Sqrt</pre><pre>10 |&gt; {it/5} == 2</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>:+</b></td>
+
+<td>
+12</td>
+
+<td>
+The 'cons' operator, combines the left and right arguments into a list e.g. <pre>1 :+ 2 == [1, 2]</pre> <pre> 1 :+ [2, 3] == [1, 2, 3]</pre> <pre>[1] :+ [2, 3] == [[1], 2, 3]</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>(</b></td>
+
+<td>
+13</td>
+
+<td>
+Function and method invocation (actual implementation is with a custom class, but we need the recedence here.)</td>
+
+</tr>
+
+<tr>
+<td>
+<b>{</b></td>
+
+<td>
+13</td>
+
+<td>
+Function and method invocation with a single lambda argument</td>
+
+</tr>
+
+<tr>
+<td>
+<b>[</b></td>
+
+<td>
+15</td>
+
+<td>
+Array index operation</td>
+
+</tr>
+
+<tr>
+<td>
+<b>?[</b></td>
+
+<td>
+15</td>
+
+<td>
+Array index operation with null handling</td>
+
+</tr>
+
+<tr>
+<td>
+<b>.</b></td>
+
+<td>
+18</td>
+
+<td>
+Property and method reference</td>
+
+</tr>
+
+<tr>
+<td>
+<b>?.</b></td>
+
+<td>
+18</td>
+
+<td>
+Property and method reference with null handling e.g. <pre>nul ?. foo == null</pre><pre>"abc"?.noSuchProp == null</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>*.</b></td>
+
+<td>
+18</td>
+
+<td>
+Property and method references on collections. e.g. <pre>File.GetProcesses()*.WS.Sum()</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>?*.</b></td>
+
+<td>
+18</td>
+
+<td>
+Property and method references on collections with null handling. e.g. <pre>ls()?*.length.Sum()</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<b>::</b></td>
+
+<td>
+20</td>
+
+<td>
+The pattern composition operator e.g. <pre> a::b </pre><pre>'bob'::a::{it > 3}::_</pre></td>
+
+</tr>
+
+
+</table>
+
+<h2>
+The Tiny Build-in Functions</h2>
+
+<p>The next table lists all of the built-in functions in Tiny. Function application can be done with parentheses like:<pre>sqrt(sum([1 .. 100]))</pre>or using the pipe |&gt; operator:<pre>[1 .. 100] |> sum |> sqrt</pre>When using the pipe operator, the first argument to the functionis the output from the previous stage in the pipeline.</p>
+<table width="100%">
+<tr>
+<th>
+<b>Function</b></th>
+
+<th>
+<b>Description</b></th>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Add()</b></pre></td>
+
+<td>
+Add an item to the end of a list; modifies it's argument and returns nothing.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>AddPass()</b></pre></td>
+
+<td>
+Add an item to the end of a list; modifies it's argument (if possible) then returns it</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Alert()</b></pre></td>
+
+<td>
+Write out an alert message in such a way that it will be distinguishable on the screen. This function supports string formatting.  e.g. <pre>alert('Hello')</pre><pre>ls() |> alert</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>All(list,
+    [TinyLambda] lambda = null)</b></pre></td>
+
+<td>
+Returns true if the result of evaluating a lambda on all of the items in the list returns true. The item is passed as 'it' and the index is passed as 'it2'  e.g. <pre>[1,2,3] |> all{it > 0}</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Any(list,
+    [TinyLambda] lambda = null)</b></pre></td>
+
+<td>
+Returns true if the result of evaluating a lambda on any of the items in the list returns true. The item is passed as 'it' and the index is passed as 'it2'  e.g. <pre>[1,2,3] |> all{it > 0}</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>AsBool(val)</b></pre></td>
+
+<td>
+Convert the argument to a boolean value e.g. <pre>AsBool("hi") == true</pre><pre>AsBool(0) == false</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>AsList(val)</b></pre></td>
+
+<td>
+Convert any object into a TinyList. e.g. <pre>'hi' |> AsList |> map {it.Length}</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>AsNumber(object)</b></pre></td>
+
+<td>
+Convert an object into a number if possible (int or double); null otherwise e.g.<pre>AsNumber('123') == 123</pre><pre>'123' |> AsNumber</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>AsString(object)</b></pre></td>
+
+<td>
+Convert an object into a string. If the argument is a list, convert each element into a list. e.g.<pre>[1,2,3] |> AsString == ["1","2","3"]</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Average()</b></pre></td>
+
+<td>
+Get the average of a list of items e.g. <pre>  shell('Get-Process') |> average 'ws' </pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Band(v1, v2)</b></pre></td>
+
+<td>
+Bitwise 'and' of two words</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Bnot(val)</b></pre></td>
+
+<td>
+Bitwise compliment of a number</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Bor(v1, v2)</b></pre></td>
+
+<td>
+Bitwise 'or' of two words</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>bshl(v1, v2)</b></pre></td>
+
+<td>
+Bitwise shift left</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>bshr(v1, v2)</b></pre></td>
+
+<td>
+Bitwise shift right</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Bxor(v1, v2)</b></pre></td>
+
+<td>
+Bitwise 'xor' of two words</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Call()</b></pre></td>
+
+<td>
+Run a script or lambda with optional arguments eg: <pre>run("./hello.tiny")</pre> or <pre>run({it + it2}, 2, 3)</pre><pre>call 'tinytest' {external:false pattern:'function'}</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Cast([Parameter(Mandatory)] object,
+    [Parameter(Mandatory)] [type] type)</b></pre></td>
+
+<td>
+Cast an object to the specified type, return null if it's not possible e.g. <pre>cast("123", [&lt;int&gt;]) is [&lt;int&gt;]</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>cd(path)</b></pre></td>
+
+<td>
+Change the current directory.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Cls()</b></pre></td>
+
+<td>
+Clear the screen .e.g. <pre>cls()</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Constants(pattern = &#39;&#39;)</b></pre></td>
+
+<td>
+Return all of the defined constants.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>CopyFile()</b></pre></td>
+
+<td>
+Copy a file e.g. <pre>CopyFile( 'foo.txt', 'bar.txt')</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>DetailedErrors([bool] flag)</b></pre></td>
+
+<td>
+Turns on the underlying PowerShell script stack trace for debugging the Tiny interpreter e.g. <pre>DetailedErrors(true)</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Distinct([TinyList] list)</b></pre></td>
+
+<td>
+Return only the unique elements in a list</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Dot()</b></pre></td>
+
+<td>
+Execute a lambda or script in the current scope. e.g. <pre>dot { a = 13 }; a == 13</pre><pre>dot 'tinytest' {external:false}</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>DumpError()</b></pre></td>
+
+<td>
+Display a detailed dump of the last error.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Env(Var,
+    ValToSet,
+    Scope = &#39;Process&#39;)</b></pre></td>
+
+<td>
+The env() function does a number of things: gets a hastable of all of the environment variables; gets a specific environment variable or sets an environment variable. Setting a variable to null deletes the variable. (Note: on non-Windows systems, the environment is case-sensitive) e.g. <pre>env().Path</pre><pre>env('PATH')</pre><pre>env('FOO', 13, 'Process')</pre><pre>env('FOO', null)</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Error()</b></pre></td>
+
+<td>
+Write out an error message. This function supports string formatting. e.g. <pre>error 'This is an error message'</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Eval()</b></pre></td>
+
+<td>
+Evaluate a string as a Tiny script. The resulting code is executed in the current scope e.g. <pre>eval('2+3')</pre> results in 5.The following sets the value of x in the current scope.<pre>eval 'x=13' ; x == 13</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Except(firstList, secondList)</b></pre></td>
+
+<td>
+Returns the items in the first list that don't appear in the second list e.g. <pre>[1..10].Except([4,5,6])</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>First()</b></pre></td>
+
+<td>
+Nondestructively fetch the first item (or first n items) from a list or string, the object if the argument is scalar and null if the argument is null.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>FlatMap()</b></pre></td>
+
+<td>
+Apply a lambda to each item in the input list, merging the results into a single flat list. The variable 'it' holds the value and 'it2' holds the index.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>ForEach(list,
+    [TinyLambda] lambda)</b></pre></td>
+
+<td>
+Apply a function to each member of a list returning nothing<pre> ls() |> foreach { println( it.name ) } </pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Format()</b></pre></td>
+
+<td>
+Varargs utility to format a string line String.Format() e.g. <pre>str = println('Hi {0}, it is {1}', 'Bob', getdate())</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>FormatArgList(fmtString,
+    argList)</b></pre></td>
+
+<td>
+Variant on Format that takes a format string and a list of values to print <pre>formatArgList("{0}+{1}", [2, 3]) == '2+3'</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Functions(pattern = &#39;&#39;)</b></pre></td>
+
+<td>
+Print help for the Tiny built-in functions</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>GetCommand()</b></pre></td>
+
+<td>
+A function to get the CommandInfo for a PowerShell command.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>GetDate()</b></pre></td>
+
+<td>
+Get the current date e.g. <pre>GetDate()</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>GetMembers(object,
+    pattern = &#39;&#39;)</b></pre></td>
+
+<td>
+Return all of the members implemented by a type formatted, as strings e.g. <pre>getmembers("abc")</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>GetRandom([int] number = 0,
+    [int] minmax = 0,
+    [int] max = 0)</b></pre></td>
+
+<td>
+Get a random number or numbers. If no arg is specified, returns a single number, arg n will give you n numbers between 1 and n e.g. <pre>GetGandom(100)</pre> will return 100 random number between 0 and 100.<pre>GetRandom(10, 1, 100)</pre>will give you 10 numbers between 1 and 100.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>GetType(object)</b></pre></td>
+
+<td>
+Return the argument's .NET type.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>HashContains([IDictionary] dictionary,
+    key)</b></pre></td>
+
+<td>
+Returns true if the dictionary contains a specified key (or use the :> and <: operators instead) e.g. HashContains(hashtable, 'key')</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Head()</b></pre></td>
+
+<td>
+Nondestructively retrieve the first item from a list e.g. <pre>head([1,2,3]) == 1</pre><pre>head("abc") == "a"</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Info()</b></pre></td>
+
+<td>
+Display an informational message on the screen. This function supports string formatting. e.g. <pre>info('Hello')</pre><pre>ls() |> info</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>IsHash(val)</b></pre></td>
+
+<td>
+True if the argument is a Dictionary.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>IsList(val)</b></pre></td>
+
+<td>
+True if the argument is a list (TinyList or System.Collections.IList).</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>IsNull(val)</b></pre></td>
+
+<td>
+True if the argument is null.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>IsNumber(val)</b></pre></td>
+
+<td>
+True if the argument is a System.Double or System.Int.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>IsString(object)</b></pre></td>
+
+<td>
+True if the argument is a string.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Join([TinyList] list,
+    sep = &quot;&quot;)</b></pre></td>
+
+<td>
+Join a list into a string e.g. <pre>join(['1', '2', '3'], '+')</pre> results in <pre>'a+b+c'</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Keys([IDictionary] dictionary)</b></pre></td>
+
+<td>
+Return all the keys from a dictionary e.g. <pre>keys(hashtable)</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>ls(pattern = &quot;*&quot;, body = null)</b></pre></td>
+
+<td>
+Get the contents of the current directory.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Map()</b></pre></td>
+
+<td>
+Apply a function to each member of a list e.g. <pre> ls() |> map { it.name } </pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>MatchAll(array,
+    pattern,
+    [TinyLambda] lambda = null)</b></pre></td>
+
+<td>
+Select items from a list that match a regex, list pattern or property pattern, optionally applying a lambda e.g. <pre>MatchAll(['one', 'two', 'three'], r/[oe]/, {it.Substring(0,3)})</pre><pre>['one', 'two', 'three'] |> matchall(r/[oe]/, {it.Substring(0,3)})</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Minus(val)</b></pre></td>
+
+<td>
+Negate a value (essentially the unary '-' operator) e.g. <pre>not(true) == false</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>New()</b></pre></td>
+
+<td>
+Varargs create a new instance of an object. e.g. <pre>New([<SomeType>], 1, 2, 3)</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>NewHash()</b></pre></td>
+
+<td>
+Varargs function that builds a hash table out of it's arguments e.g. <pre>hash(k1, v2, k2, v2, k3, v3)</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>NewList([int] size,
+    initialValue = null)</b></pre></td>
+
+<td>
+Create a new list of the specified size with an optional initial value e.g. <pre>list(size, 'X') == ['x'] * size</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Not(val)</b></pre></td>
+
+<td>
+Return the boolen complement of the argument object using PowerShell truthy semantics.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>NotMatchAll(array,
+    [string] pattern,
+    [TinyLambda] lambda = null)</b></pre></td>
+
+<td>
+Select items from a list that don't match a regex, optionally applying a lambda e.g. <pre>NotMatchAll( ['one', 'two', 'three'], r/[xyz]/, {it.Substring(0, 3)})</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Operators(pattern = &#39;&#39;)</b></pre></td>
+
+<td>
+Print help for the Tiny built-in operators.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>OutHost(value)</b></pre></td>
+
+<td>
+Use the PowerShell Out-Host command to display an object e.g. <pre>OutHost(shell('gps'))</pre> <pre>Utils.GetProcesses() |> OutHost() </pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Parse()</b></pre></td>
+
+<td>
+Parse text into a Tiny expression tree e.g. <pre>parse('2 + 3 * 4')</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>ParseFile(file)</b></pre></td>
+
+<td>
+Read and parse a file into a Tiny expression tree. e.g. <pre>parsefile('hello.tiny')</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Print()</b></pre></td>
+
+<td>
+Print a string without a new line. Formatting is supported like String.Format. <pre>print('Hi {0}, it is {1}', 'Bob', getdate())</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>PrintList([TinyList] list)</b></pre></td>
+
+<td>
+Print a list to the screen, one object at a time e.g. <pre>printlist([1,2,3,4,5])</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Println()</b></pre></td>
+
+<td>
+Print a line to the screen; formatting is supported like String.Format e.g. <pre>println('Hi {0}, it is {1}', 'Bob', getdate())</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Product([TinyList] list,
+    propertyOrLambda)</b></pre></td>
+
+<td>
+Compute the product ot the values in the list argument, using a lambda if one is supplied. e.g. <pre> [1, 2, 3, 4] |> product == 24</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Property([TinyList] list,
+    [string] Property)</b></pre></td>
+
+<td>
+Extract a specific property from each member in a list e.g. <pre> ls() |> property('name') </pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Pwd()</b></pre></td>
+
+<td>
+Get the current working directory.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Quit()</b></pre></td>
+
+<td>
+function to quit the Tiny repl. e.g. <pre>quit()</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Range()</b></pre></td>
+
+<td>
+Return a list of numbers over the range specified with an optional step ex: range(low, hi[, step]). This function is semantically equivalent to the range operator.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>ReadFile(filenames,
+    filter = &#39;&#39;,
+    [TinyLambda] lambda)</b></pre></td>
+
+<td>
+Read the lines of a file or files into a list with an optional regex filter and an optional action (lambda) to take for each line. If more than one file is specified, the lines are concatenated together. Within the lambda, the filename is available as 'filename' and the regex matches are available as the match specification of the regex (matches by default). Also, when a lambda is specified, the file is read line by line rather than all at once. e.g. <pre>ReadFile('foo.tiny', 'fn +([a-z_0-9]+)')</pre><pre>ls '*.tiny' {recurse:true} |> readfile r/^ *fn (\w*)/:name { name[1] }</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>ReadKey()</b></pre></td>
+
+<td>
+Read a keystroke from the console e.g. <pre>key = readkey()</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>ReadLine([string] prompt)</b></pre></td>
+
+<td>
+Read a line from the console with an optional prompt e.g. <pre>name = readfile('Enter your name:')</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>ReadText(filenames)</b></pre></td>
+
+<td>
+Return the contents of a file as a single string. If multiple files are specified, they are concatenated together e.g. <pre>ReadText('foo.tiny')</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Reduce([TinyList] list,
+    [TinyLambda] lambda)</b></pre></td>
+
+<td>
+A function to reduce/fold/aggregate a list using a lambda (this function calls the Reduce() method) <pre>[1..10] |> reduce{it + it2} == 55</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>ReduceWithSeed([TinyList] list,
+    [object] seed,
+    [TinyLambda] lambda)</b></pre></td>
+
+<td>
+A function to reduce/fold/aggregate a list using a lambda, starting with an initial seed value. (This function calls the ReduceWithSeed() method) <pre>[1..10] |> ReduceWithSeed(45, {it + it2}) == 100</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Regex([string] patternString,
+    [RegexOptions] options = &#39;CultureInvariant,Ignorecase&#39;)</b></pre></td>
+
+<td>
+Convert a string to a regular expression, possibly with options ([<RegexOption>]).</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>RemoveFile()</b></pre></td>
+
+<td>
+Remove a file e.g.<pre>RemoveFile('bar.txt')</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Replace(valToReplace,
+    [string] pattern,
+    [string] replace = &quot;&quot;)</b></pre></td>
+
+<td>
+Replace elements in a string or array of strings with an (optional) replacement string e.g. <pre>replace('abc', 'a', 'A')</pre> results in <pre>'Abc'</pre>and<pre>['abc', 'adf'] |> replace('a', 'A') == ['Abc', 'Adf']</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Reverse(listOrString)</b></pre></td>
+
+<td>
+Returns the argument collection or string reversed. e.g. <pre>[1,2,3,4] |> reverse == [4,3,2,1]</pre><pre>'abcd' |> reverse == 'dcba'</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>ScriptBlock()</b></pre></td>
+
+<td>
+Create a PowerShell scriptblock from a string. A scriptblock can be assigned to a variable and then used as a function.<pre>plus = ScriptBlock 'param ($x, $y) $x + $y'</pre><pre>plus(2, 3) == 5</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>sh()</b></pre></td>
+
+<td>
+Invoke a cmdlet by name passing parameters in a dictionary <pre>sh 'get-command' {name: "get-date"}</pre><pre>sh 'Get-ChildItem' {filter: '*.txt' recurse:true} |> sh 'Get-Content'</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>shargs(cmd,
+    positionalArgs = @(),
+    [IDictionary] namedArgs = @{},
+    pipelineInput = null)</b></pre></td>
+
+<td>
+Invoke a cmdlet with th option to explicitly pass in pipieline input TBD BUGBUGBUG</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Shell()</b></pre></td>
+
+<td>
+Evaluate a PowerShell expression; the result is always an array e.g. <pre>shell('ls -filter *.tiny')</pre><pre>shell('Get-Process').sum {p -> p.WS}</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>ShellVar()</b></pre></td>
+
+<td>
+Get the value of a PowerShell (as opposed to a Tiny) variable e.g. <pre>PwshVar('PSHome')</pre><pre>shellvar('PSHome') {scope:'global'}</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Skip([TinyList] list,
+    numToSkip)</b></pre></td>
+
+<td>
+Skip n items in the list, returning a new list</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>SkipNullOrEmpty(list)</b></pre></td>
+
+<td>
+Skip over nulls in a list producing new clean list.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Sleep(duration = 100)</b></pre></td>
+
+<td>
+Sleep for a period of time; time is in ms; default is 100ms e.g. <pre>sleep(2000)</pre> sleeps 2 seconds.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Slice(list,
+    [int] start,
+    [int] end = -1)</b></pre></td>
+
+<td>
+Cut a slice from a list (Uses the TinyList .Slice() method.) Positive indexs start from the front of the list. Negative indexes are from the end of the list. e.g. <pre>[1..10] |> Slice(1,4)</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Sort(list,
+    PropertyOrLambda = null)</b></pre></td>
+
+<td>
+Sort a list, optionally specifing a lambda or property name e.g. <pre>list(shell('gps'), 'WS')</pre> Also see the methods section<pre>list.sort()</pre> or <pre>list.sort("propname")<pre> or <pre>shell('gps').Sort{it.WS}</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>SortDescending(list,
+    PropertyOrLambda)</b></pre></td>
+
+<td>
+Sort a list in descending order, optionally specifing a lambda or property name e.g. <pre>list(shell('gps'), 'WS')</pre> See also the methods <pre>list.sort()</pre> or <pre>list.sort("propname")<pre> or <pre>shell('gps').Sort{it.WS}</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Split(valToSplit,
+    pattern,
+    [int] index = -1)</b></pre></td>
+
+<td>
+Split a string into a list using a regex, optionally selecting a specific index e.g. <pre>split("a b c", " ",1) # returns "b"</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Start()</b></pre></td>
+
+<td>
+Launch the program associated with a file using ShellExecute e.g. <pre>start('./Tiny Documentation.html')</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>static()</b></pre></td>
+
+<td>
+Find the first element in a last where the lambda evaluates to true.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Sum()</b></pre></td>
+
+<td>
+Sum the values in the argument list e.g. <pre> sum([1,2,3,4]) == 10 </pre><pre>shell('Get-ChildItem -file') |> sum 'length'</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Tail()</b></pre></td>
+
+<td>
+Non-destructively retrieve all but the first elements from a list or stringe.g. <pre>tail([1,2,3]) == [2,3]</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Take()</b></pre></td>
+
+<td>
+Take the first n items from the list</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Time()</b></pre></td>
+
+<td>
+This function is essentially the same as Call() but adds execution timing e.g. <pre>time { [1..10].sum() }</pre> or <pre>time('./scripttorun.tiny')</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>ToHash([TinyList] list,
+    propertyOrLambda = null)</b></pre></td>
+
+<td>
+Convert a list into a hash table indexed by item, named property or lambda calculation value with a count (basic) or list of items (property or lambda) as the value e.g. <pre> getrandom(100) |> tohash() </pre> <pre>shell('gps') |> ToHash { it.ProcessName } </pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>TraceOff()</b></pre></td>
+
+<td>
+Turn off function tracing</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>TraceOn(pattern)</b></pre></td>
+
+<td>
+Turn on function tracing; the argument is a regular expression used to match the names of functions to trace.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>TypeName(object)</b></pre></td>
+
+<td>
+Return the type name string for the argument's type.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Union(firstList, secondList)</b></pre></td>
+
+<td>
+Return the union of two lists e.g. <pre>[1,2,3,4] |> Union([3,4,5,6]) == [1,2,3,4,5,6]</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Values([IDictionary] dictionary)</b></pre></td>
+
+<td>
+Return all the values from a dictionary e.g. <pre>values(hashtable)</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>VarExists(name)</b></pre></td>
+
+<td>
+Returns true if a variable exists e.g. <pre>x = 1</pre><pre>varexists('x')</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>VarRemove(name)</b></pre></td>
+
+<td>
+Removes a variable from the scope stack. e.g. <pre>VarRemove('foo')</pre><pre>VarExists('foo') then VarRemove('foo')</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Vars(filter = &#39;&#39;)</b></pre></td>
+
+<td>
+Return the names of all currently defined variables, filtered by an optional regular expression e.g. <pre>vars r/void/ == ['void']</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>VarSet(name, value)</b></pre></td>
+
+<td>
+Sets the named Tiny variable. e,g, <pre>VarSet('foo', 13)</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Void(val)</b></pre></td>
+
+<td>
+Discard the argument value (essentially a cast to void).</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Warn()</b></pre></td>
+
+<td>
+Write out a warning message. This function supports string formatting. e.g. <pre>warning('This is an error message {0}', 123)</pre><pre>[1..10] |> warning</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Where(list,
+    [TinyLambda] lambda)</b></pre></td>
+
+<td>
+Filter a list using a lambda e.g. <pre>[1 .. 10] |> where { it % 2 == 0 }</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>WriteFile([Parameter(Mandatory)] lines,
+    [Parameter(Mandatory)] fileName,
+    [Parameter()] Encoding = [System.Text.Encoding]::Default)</b></pre></td>
+
+<td>
+Write an array of strings to a file <pre>WriteFile([1, 2, 3, 4, 5], 'output.txt')</pre><pre> [1 .. 10 ] |> writefile 'output.txt' </pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>WriteText([string] text,
+    fileName)</b></pre></td>
+
+<td>
+Write a string to a file e.g. <pre>writetext('output.txt', 'The text to write.')</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Zip(list1, list2, lambda)</b></pre></td>
+
+<td>
+Join two lists together, either in pairs or using an optional lambda e.g. <pre>zip([1,2,3], [4,5,6])</pre>results in<pre>[[1,4], [2,5], [3,6]]</pre>and<pre>zip([1,2,3], [4,5,6], {it + it2})</pre>results in<pre>[5, 7, 9]</pre></td>
+
+</tr>
+
+
+</table>
+
+<h2>
+The Tiny List (Array) Operations</h2>
+
+<p>Tiny provides a large set of list operations in the form of methods. The core typefor lists in Tiny is [&lt;TinyList&gt;] which is a wrapper around the .NET List&lt;object&gt; class.(This class exists because it's essentially impossble to freely pass IEnumerablesaround in PowerShell without having them shredded. Unfortunatly TinyList leads to alot of overhead which slows everything down.)</p>
+<p>Many of the list operations are similar to LINQ query operators and take lambdas as arguments(Note: some of them are actually implemented with LINQ but, in Tiny, they are all eager.) InTiny, like in PowerShell, if the method takes a single lambda, the parentheses may be omitted as in<pre>[1 .. 10].map({n -> n * n})</pre>can be written as<pre>[1 .. 10].map{n -> n * n}</pre>Many of the list methods use the implicit 'it' and 'it2' variables to pass values to the lambdasas in:<pre>[1 .. 10].map{ it * it }     # Square all of the list items[1 .. 10].reduce{ it + it2 } # sum the list items</pre>The following table describes all of the list operators.</p>
+<table width="100%">
+<tr>
+<th>
+<b>Method</b></th>
+
+<th>
+<b>Description</b></th>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[void] Add ([object] obj)</b></pre></td>
+
+<td>
+ Add an element to the list. (This API modifies it's list.) e.g. <pre>l = []</pre><pre>l.Add(1)</pre><pre>l.Add(2)</pre><pre>l == [1, 2]</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[void] AddRange ([System.Collections.IEnumerable] ilist)</b></pre></td>
+
+<td>
+ Add a collection of items to the list. (Modifies the list.)</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[bool] All()</b></pre></td>
+
+<td>
+ Returns true if all of the elements in the list are true e.g. <pre>[1,2,3].All() == true</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[bool] All([TinyLambda] lambda)</b></pre></td>
+
+<td>
+ Returns true if the result of evaluating a lambda on all of the items in the list returns true. The item is passed as 'it' and the index is passed as 'it2'  e.g. <pre>[1,2,3].all{it > 0}</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[bool] Any ()</b></pre></td>
+
+<td>
+ Returns true if any of the elements in the list are true</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[bool] Any ([TinyLambda] lambda)</b></pre></td>
+
+<td>
+ Returns true if the result of evaluating a lambda on any of the items in the list returns true. The item is passed as 'it' and the index is passed as 'it2'  e.g. <pre>[1,2,3].all{it > 0}</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>BUGBUGBUG - it returns a tiny list,
+	 not an array segment!</b></pre></td>
+
+<td>
+ Returns a slice of the list as an ArraySegment[object]. This method differes from GetRange() in that negative indexes count from the end of the list e.g. <pre>[1..10].slice(-4,-1) == [7,8,9,10]</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[void] Clear()</b></pre></td>
+
+<td>
+ Clear this list e.g. <pre>l = [1,2,3]</pre><pre>l.clear()</pre><pre>l.count == 0</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[bool] Contains([object] object)</b></pre></td>
+
+<td>
+ Returns true if the list contains the specified object.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] Copy()</b></pre></td>
+
+<td>
+ Make a shallow copy of this list i.e. the list is copied but not the items in the list. e.g. <pre> l = [1,2,3]</pre><pre>m = l.Copy()</pre><pre>l[1] = 20</pre><pre>l == [1, 20, 3] && m == [1, 2, 3]</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] Distinct()</b></pre></td>
+
+<td>
+ Return a new list containing only the distinct items from the list e.g. <pre> [1,2,2,3,4,3].Distinct() == [1,2,3,4] </pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[bool] Equals (listToCompare)</b></pre></td>
+
+<td>
+ Compare this list against another collection; this methods is used by == to compare lists e.g. <pre> [1,2,3].Equals([1, 2, 3]) </pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] Except(secondList)</b></pre></td>
+
+<td>
+ Returns the items in the first list that don't appear in the second list e.g. <pre>[1..0].Except([4,5,6])</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] Filter( [TinyLambda] )</b></pre></td>
+
+<td>
+ Filter a list of items based on the return value of a lambda <pre> [1 .. 10].filter{ i % 2 == 0 } </pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[object] Find ([TinyLambda] lambda)</b></pre></td>
+
+<td>
+ Find the item matched by the lambda e.g. <pre>[1, 3, 5].FindIndex{it == 3} == 1</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[int] FindIndex ([TinyLambda] lambda)</b></pre></td>
+
+<td>
+ Find the index of the item matched by the lambda e.g. <pre>[1,3,5].FindIndex{it == 3} == 1</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[object] FindLast ([TinyLambda] lambda)</b></pre></td>
+
+<td>
+ Find the last item matched by the lambda e.g. <pre>[1, 2, 3, 4, 5].FindLastIndex{it % 2 == 0} == 3</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[int] FindLastIndex ([TinyLambda] lambda)</b></pre></td>
+
+<td>
+ Find the index of the last item matched by the lambda e.g. <pre>[1, 3, 3, 5].FindLastIndex{it == 3} == 2</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[object] First()</b></pre></td>
+
+<td>
+ Get the first element from a list. (Same as Head().)</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[object] First([int] n)</b></pre></td>
+
+<td>
+ Get the first n elements from a list.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[object] First([TinyLambda] func)</b></pre></td>
+
+<td>
+ Find the first element in a last where the lambda evaluates to true.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] FlatMap ([TinyLambda] lambda)</b></pre></td>
+
+<td>
+ Apply a lambda to each item in the list, returning a new flattened list e.g. <pre>[1,2,3,4,5].flatmap{[it, it]}</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Flatten =</b></pre></td>
+
+<td>
+ A function to flatten a list so any nested lists are merged into the parent e.g. <pre>[[1,2], [2,3]] |> flatten() == [1,2,3,4]</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] Flatten()</b></pre></td>
+
+<td>
+ Flatten a list so any nested lists are merged into the parent e.g. <pre>[[1,2], [2,3]].flatten() == [1,2,3,4]</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>ForEach( [TinyLambda] )</b></pre></td>
+
+<td>
+ Apply a lambda to each item in the list. NOTE: ForEach{} returns nothing. e.g. <pre> [1 .. 10].foreach{ println("It is " + it)} == null </pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>G for the grammar</b></pre></td>
+
+<td>
+ for TinyList methods.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] GetRange([int] start,
+	 [int] length)</b></pre></td>
+
+<td>
+ Get a subrange of a list; if more items are requested than available, the list will be truncated to what's avaiable</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[object] Head()</b></pre></td>
+
+<td>
+ Nondestructively retrieve the first item from a list</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Insert([int] index,
+	 objectToInsert)</b></pre></td>
+
+<td>
+ Insert an item at a specific point in an existing list</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>InsertRange([int] index,
+	 listToInsert)</b></pre></td>
+
+<td>
+ Insert a list of itens at a specific point in an existing list</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] Intersect(secondList)</b></pre></td>
+
+<td>
+ Return the intersection of two lists</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[object] Item(index)</b></pre></td>
+
+<td>
+ Return the item at the specified index.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[string] Join()</b></pre></td>
+
+<td>
+ Join the members of a list into a string without a separator e.g. <pre>'abcde'.tochararray().aslist().reverse().join()</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[string] Join([string] sep)</b></pre></td>
+
+<td>
+ Join the members of a list into a string with an optional separator e.g. <pre> eval([1 .. 10].Join('+')) == 55</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] JoinLists(innerList,
+	</b></pre></td>
+
+<td>
+ Join two lists together using three lambdas - the outer key selector, the inner key selector and the result selector</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[object] Last()</b></pre></td>
+
+<td>
+ Return the last element in a list.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[object] Last([int] n)</b></pre></td>
+
+<td>
+ Return the last N elements in a list</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] Map (lambda)</b></pre></td>
+
+<td>
+ Apply a lambda to each item in the list, returning a new list e.g. <pre>[1,2,3,4,5].map{n -> n * n}</pre><pre>[1 .. 10].map{it * it}</pre><pre>fn sqr n -> n * n; [1..10].map(sqr)</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] MatchAll (pattern,
+	 [TinyLambda] lambda = null)</b></pre></td>
+
+<td>
+ Return all items matching a regular expression and apply a lambda to the result e.g. <pre>ls().match('\.tiny$', {it.Length}).Sum() </pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] MatchAll (pattern)</b></pre></td>
+
+<td>
+ Return all items matching a regular expression e.g. <pre>ls().match('\.tiny$')</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] NotMatch ([string] pattern,
+	 [TinyLambda] lambda = null)</b></pre></td>
+
+<td>
+ Return all items NOT matching a regular expression and apply a lambda to the result e.g. <pre>ls().notmatch('\.tiny$', {it.Length}).Sum() </pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] NotMatch ([string] pattern)</b></pre></td>
+
+<td>
+ Return all items NOT matching a regular expression e.g. <pre>ls().notmatch('\.tiny$')</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>OutHost()</b></pre></td>
+
+<td>
+ Display the list using the PowerShell 'Out-Host' command.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[object] Pop()</b></pre></td>
+
+<td>
+ Destructively pop an item from the beginning of a list. (Modifies the list.)</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Print(pattern)</b></pre></td>
+
+<td>
+ Print the list to the screen, one item at a time. An optional regex can be used to filter the items e.g. <pre>ls().Print()</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[object] Product()</b></pre></td>
+
+<td>
+ Multiply all of the items in the list e.g. <pre>[1 .. 10].product()</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[object] Product([TinyLambda] lambda)</b></pre></td>
+
+<td>
+ Multiply the result of evaluating a lambda on all of the items in the list. The item is passed as 'it' and the index is passed as 'it2'  e.g. <pre>shell('gps').product{it.WorkingSet}</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>Push ([object] obj)</b></pre></td>
+
+<td>
+ Push an item at the front of a list. (Modifies the list.)</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[object] Reduce ([TinyLambda] lambda)</b></pre></td>
+
+<td>
+ Iteratively apply a lambda to each element in the list e.g. to sum the list do <pre>[1 .. 10].reduce{ it + it2 }<pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[object] ReduceWithSeed ([object] Seed,
+	  [TinyLambda] lambda)</b></pre></td>
+
+<td>
+ Iteratively apply a lambda to each element in the list starting with an initial seed e.g. add all items to a has table do <pre>[1 .. 10].reducewithseed( {}, {it[it2] += 1 }<pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>RemoveAt([int] index)</b></pre></td>
+
+<td>
+ Remove a single item from a TinyList. This method mutates the object and returns nothing. Negative numbers are indexed from the end. e.g. <pre>a=[1,2,3]<pre></pre>a.RemoveAt(1)<pre></pre>a == [1,3]</pre><pre>a=[1,2,3,4]<pre><pre></pre></pre>a.RemoveAt(-2)<pre></pre>a == [1,2,4]</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>RemoveRange([int] index,
+	 [int] numberToRemove)</b></pre></td>
+
+<td>
+ Remove a range of items from a TinyList. Negative index & count are offset from the end of the list. This method mutates the object and returns nothing. e.g.<pre>a=[1,2,3,4]</pre><pre>a.RemoveRange(1,2)</pre><pre>a == [1,4]</pre><pre>a=[1,2,3,4]</pre><pre>a.RemoveRange(-1,2)</pre><pre>a == [1,2]</pre><pre></pre><pre>a=[1,2,3,4]</pre><pre>a.RemoveRange(-2,-2)</pre><pre>a == [3,4]</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] Replace(pattern,
+	 subst)</b></pre></td>
+
+<td>
+ Convert all lists items into streams and then do a regex replace with an optional replacement e.g. <pre> ls('*.tiny').replace('^.*[\\/]', '').print() </pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] Reverse()</b></pre></td>
+
+<td>
+ Return a new list with the order of the items reversed e.g. <pre> [1, 2, 3].Reverse() == [3, 2, 1] </pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] Skip ([int] num)</b></pre></td>
+
+<td>
+ Skip the first num items in a list. If the number to skip is greater than the number of items in the list; an empty list is returned.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] SkipNullOrEmpty()</b></pre></td>
+
+<td>
+ Skip all null or empty items in a list.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] SkipUntil ([TinyLambda] lambda)</b></pre></td>
+
+<td>
+ Skip items in the list until the specified lambda returns true. The current item is available in 'it' and the index is in 'it2'</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] Sort()</b></pre></td>
+
+<td>
+ Sort a list in ascending order e.g. <pre>getRandom(10).Sort()</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] Sort([TinyLambda] lambda)</b></pre></td>
+
+<td>
+ Sort a list based on the result of a lambda e.g. <pre> shell('gps').sort{ it.WS }.Last(10) </pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] SortDescending()</b></pre></td>
+
+<td>
+ Sort a list in descending order e.g. <pre>getRandom(10).SortDescending()</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] SortDescending([TinyLambda] lambda)</b></pre></td>
+
+<td>
+ Sort a list in descending order based on the result of a lambda e.g. <pre> shell('gps').sortdescending{ it.WS }.take(10) </pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] Split()</b></pre></td>
+
+<td>
+ Turn each item in a list into a string, split that string on spaces and then flatten the result.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] Split([TinyLambda] lambda)</b></pre></td>
+
+<td>
+ Split a list into two parts based on whether a lambda returns true or not e.g.<pre>  even :: odd = [1..10].split{ it % 2 == 0} </pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] Split(pattern)</b></pre></td>
+
+<td>
+ Turn each item in a list into a string, split that string using the provided regex and then flatten the result e.g. <pre> ['a-b', 'c-d'].Split(r/-/) == ['a', 'b', 'c', 'd'] </pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>static [TinyList] Partition ([TinyList] list,
+	 [int] size)</b></pre></td>
+
+<td>
+ Static routine to partition a list into sublists used by the split method e.g. <pre>[TinyList]::Partition([1..10], 3)</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[object] Sum ([TinyLambda] lambda)</b></pre></td>
+
+<td>
+ Sum the result of evaluating a lambda on all of the items in the list. The item is passed as 'it' and the index is passed as 'it2'  e.g. <pre>shell('gps').sum{it.WorkingSet}</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[object] Sum()</b></pre></td>
+
+<td>
+ Sum all of the items in the list e.g. <pre>[1 .. 10].sum()</pre> or <pre>['a', 'b', 'c'].sum() </pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] Tail()</b></pre></td>
+
+<td>
+ Non-destructively retrieve all but the first element from a list.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] Take ([int] num)</b></pre></td>
+
+<td>
+ Take num items from the beginning of the list non-destructively. If more items are requested than the list contains, only return the available items.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] TakeUntil ([TinyLambda] lambda)</b></pre></td>
+
+<td>
+ Take items from the list until the specified lambda returns true. The current item is available in 'it' and the index is in 'it2'</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[Hashtable] ToHash()</b></pre></td>
+
+<td>
+ Convert a list into a hashtable. The list element is added as a key with the value being a count of the number of times the element appears in the list.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[HashTable] ToHash([string] property)</b></pre></td>
+
+<td>
+ Convert a list into a hashtable keyed on the named property. The item value is stored in array with the associated key.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[HashTable] ToHash([TinyLambda] lambda)</b></pre></td>
+
+<td>
+ Convert a list into a hashtable keyed by the value of returned from the lambda. The item value is stored in an array with it's associated key.</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[string] ToString ()</b></pre></td>
+
+<td>
+ Convert the list into a string e.g. <pre>[1, 2, 3].ToString() == '[1, 2, 3]'</pre></td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[bool] TrueForAll()</b></pre></td>
+
+<td>
+ Return true of all of the list elements are true</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[bool] TrueForAll([TinyLambda] lambda)</b></pre></td>
+
+<td>
+ Return true if result of applying the lambda to each list item is true</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] Union(secondList)</b></pre></td>
+
+<td>
+ Return the union of two lists</td>
+
+</tr>
+
+<tr>
+<td>
+<pre><b>[TinyList] Where([TinyLambda] lambda)</b></pre></td>
+
+<td>
+ Filter a list of objects <pre>[1 .. 10].where{it % 2 == 0}</pre></td>
+
+</tr>
+
+
+</table>
+
+<h2>
+The Tiny Grammar</h2>
+
+<p>This section shows the tiny grammar as extracted from the source code.Tiny is processed using a recursive descent parser and a regular expression-basedtokenizer.</p>
+<pre>ohere
+ BinaryOperator = &#39;as&#39; | &#39;??&#39; | &#39;.&#39; | &#39;|&gt;&#39; | &#39;?[&#39; | &#39;*&#39; | &#39;&gt;=&#39; | &#39;*.&#39; | &#39;-=&#39;
+                  | &#39;is&#39; | &#39;&gt;&#39; | &#39;?.&#39; | &#39;-&#39; | &#39;!:&gt;&#39; | &#39;**&#39; | &#39;:&gt;&#39; | &#39;..&#39; | &#39;::&#39; | &#39;%&#39;
+                  | &#39;&lt;=&#39; | &#39;/=&#39; | &#39;then&#39; | &#39;~&#39; | &#39;(&#39; | &#39;&lt;&#39; | &#39;==&#39; | &#39;+=&#39; | &#39;!~&#39; | &#39;&amp;&amp;&#39;
+                  | &#39;/~&#39; | &#39;=&#39; | &#39;?=&#39; | &#39;/&#39; | &#39;+&#39; | &#39;*~&#39; | &#39;*=&#39; | &#39;[&#39; | &#39;isnot&#39; | &#39;{&#39;
+                  | &#39;||&#39; | &#39;!&lt;:&#39; | &#39;&lt;:&#39; | &#39;-~&#39; | &#39;!=&#39; ;;
+
+ Name = &#39;[a-z_][a-z0-9__]*&#39; ;;
+
+ LambdaLiteral = &#39;{&#39; ParameterList &#39;-&gt;&#39; StatementList &#39;}&#39; ;;
+
+ ObjectLiteral = &#39;{&#39; Name &#39;:&#39; Expression [[&#39;;&#39;] Expression ] * &#39;}&#39; ;;
+
+ FunctionCall = Expression &#39;(&#39; ArgumentList &#39;)&#39; [ LambdaLiteral | ObjectLiteral ] |
+                Expression LambdaLiteral [ LambdaLiteral | ObjectLiteral ]        |
+                Expression ObjectLiteral [ LambdaLiteral | ObjectLiteral ]        |
+                Expression StringLiteral [ LambdaLiteral | ObjectLiteral ]        |
+                Expression RegexLiteral  [ LambdaLiteral | ObjectLiteral ]
+                ;;
+
+ Value       = NumericLiteral     |
+               StringLiteral      |
+               RegexLiteral       |
+               Variable           |
+               ObjectLiteral      |
+               LambdaLiteral      |
+               TypeLiteral        |
+               FunctionCall       |
+               PropertyExpression |
+               ArrayIndex         |
+              &#39;(&#39; Statement &#39;)&#39;
+              ;;
+
+ NumericLiteral = &#39;(-)?[0-9]+(\.[0-9]+)?(e[0-9]+)?&#39; ;;
+
+ # Tiny supports both single and double-quoted strings.
+ # Escapes are processed in double-quoted strings.
+ # Expansions are not supported.
+
+ StringLiteral = &#39;&quot;[^&quot;]*&quot;&#39; | &#39;&#39;&#39;[^&#39;&#39;&#39;]*&#39; ;;
+
+ RegexLiteral = &#39;r/[^/]*/[c]?([a-z][a-z0-9]*)?&#39; ;;  # Case-insensitive by default,
+                                                    # Case-sensitive with trailing option e.g. r/abc/c
+                                                    # Optionally specify the name of the variable to store matches in.
+
+ # Type literals look like  [&lt;int&gt;] or [&lt;System.Collections.IDictionary&gt;]. This
+ # is similar to F#&#39;s attribute syntax.
+
+ TypeLiteral  =  &#39;\[&lt;[a-z][a-z0-9.\[\]]*&gt;]&#39; ;;
+
+ Variable     =  Name;;
+
+ PropertyExpression = PropertyExpression [ &#39;.&#39; | &#39;?.&#39; ] Expression ;;
+
+ ArrayIndex = Expression [ &#39;[&#39; | &#39;?[&#39; ] Expression &#39;]&#39; ;;
+
+ ArgumentList = Expression [ &#39;,&#39; Expression ] ;;
+
+ ParameterList = Name [ &#39;,&#39; Name ] * ;;
+
+ ParameterDeclaration = &#39;(&#39; ParameterList &#39;)&#39; | ParameterList ;;
+
+ Expression = Value [ BinaryOperator  Expression ] * ;;
+
+ IfStatement = &#39;if&#39; &#39;(&#39; Expression &#39;)&#39; &#39;{&#39; StatementList &#39;}&#39;
+               [&#39;elseif&#39; &#39;(&#39; Expression &#39;)&#39; &#39;{&#39; StatementList &#39;}&#39;] *
+               [&#39;else&#39; &#39;{&#39; StatementList &#39;}&#39; ] ;;
+
+ WhileStatement = &#39;while&#39; &#39;(&#39; Expression &#39;)&#39; &#39;{&#39; StatementList &#39;}&#39; ;;
+
+ ForeachStatement = &#39;foreach&#39; &#39;(&#39; Name &#39;in&#39; Expression &#39;)&#39; &#39;{&#39; StatementList &#39;}&#39; ;;
+
+ MatchStatement = &#39;match&#39; Expression [ &#39;|&#39; Expression &#39;-&gt;&#39; Statement ] + | &#39;|&#39; &#39;-&gt;&#39; statement ;;
+ # Match expressions can be patterns in which case binding is done
+ # There can only be one default case which looks line &#39;| -&gt; &quot;I&#39;m the default&quot;&#39;
+
+ MatchListStatement = &#39;matchlist&#39; Expression [ &#39;|&#39; Expression &#39;-&gt;&#39; Statement ] | &#39;|&#39; &#39;-&gt;&#39; Statement ;;
+ # iterates over the a list matching against each item
+
+ FunctionDefinition = &#39;fn&#39; Name ParameterDeclaration ( &#39;{&#39; StatementList &#39;}&#39; | &#39;-&gt;&#39; Statement ) ;;
+ # The result of a function is the result of the last statement executed (no return statement)
+ # Examples: &#39;fn double x -&gt; x * 2&#39; or &#39;fn add (x, y) { x+y }
+
+ Statement =    FunctionDefinition | IfStatement        | WhileStatement | ForeachStatement  |
+                MatchStatement     | MatchListStatement | BreakStatement | ContinueStatement |
+                ThrowStatement     | TryCatchStatement  | ReturnStatement ;;
+
+et-pscallstack | out-host
+ BreakStatement    = &#39;break&#39; ;;
+
+ ContinueStatement = &#39;continue&#39; ;;
+
+ ReturnStatement   = &#39;return&#39; [ Expression ] ;;
+
+ ThrowStatement    = &#39;throw&#39; Expression ;;
+
+ StatementList    = Statement * ;;
+
+ TryCatchStatement = &#39;try&#39;   &#39;{&#39; StatementList &#39;}&#39; &#39;catch&#39; &#39;{&#39; StatementList &#39;}&#39;
+                     [ &#39;finally&#39; &#39;{&#39; StatementList &#39;}&#39; ]
+                     ;;
+</pre>
+<h3>
+Operator Precedence Table</h3>
+
+<pre> 20: ::
+ 18: ?.  *.  ?*.  .
+ 15: [  ?[
+ 13: {  (
+ 12: :+
+ 11: |&gt;
+ 10: **  -f
+  8: /  %  *
+  6: -  ++  +
+  5: ..
+  4: -~  ~  !=  *~  &lt;=  ??  /~  :&gt;  &lt;:  &gt;=  &lt;  !:&gt;  !~  &gt;  !&lt;:  ==
+  3: isnot  is  as
+  2: +=  /=  ?=  then  =  &amp;&amp;  -=  do  *=  ||</pre>
+</body>
+</html>

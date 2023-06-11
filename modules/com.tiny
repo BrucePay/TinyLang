@@ -1,0 +1,14 @@
+###################################################################
+#
+# Module wrapping COM classes
+#
+###################################################################
+
+COM = {
+    
+    GetWScriptShell: ScriptBlock('New-Object -Com WScript.Shell')
+                     .InvokeReturnAsIs
+
+}
+
+

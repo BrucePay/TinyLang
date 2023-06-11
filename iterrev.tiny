@@ -1,0 +1,25 @@
+####################################################
+#
+# Iterative list reversal in Tiny.
+#
+####################################################
+
+fn rev list {
+    startIndex = 0;
+    endIndex = list.count - 1;
+    while (startIndex < endIndex) {
+        v1 = list[startIndex];
+        v2 = list[endIndex]; 
+        list[startIndex] = v2;
+        list[endIndex] = v1;
+        startIndex += 1;
+        endIndex -= 1
+   };
+   list
+}
+
+"Reversing numbers from 1 to 100" |> println
+rev([1..100]) |> println
+
+
+

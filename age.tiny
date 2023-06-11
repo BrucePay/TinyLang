@@ -1,0 +1,59 @@
+################################################################
+#
+# An example showing how function sets can be alternatives
+# to (small) dictionaries. (After a similar example in Elixir.)
+#
+################################################################
+
+println("Computing ages on different planets.")
+
+earth_year = 31_557_600
+
+planet_factors = {
+    earth:      1,
+    mercury:    0.2408467,
+    venus:      0.61519726,
+    mars:       1.8808158,
+    jupiter:    11.862615,
+    saturn:     29.447498,
+    uranus:     84.016846,
+    neptune:    164.79132
+  }
+
+#
+# Return the number of years a person that has lived for 'seconds' seconds is
+# aged on 'planet'.
+#
+
+fn [<double>] age_on([<string>] planet, [<double>] seconds) {
+    seconds / earth_year / planet_factors[planet]
+}
+
+# Generate an age to test in seconds
+[<double>] ageToTest = 57.0 *365*24*60*60;
+
+# Test that age on a number of planets.
+('mars    ' + age_on('mars',  ageToTest))   |> println;
+('earth   ' + age_on('earth', ageToTest))   |> println;
+('jupiter ' + age_on('jupiter', ageToTest)) |> println;
+('saturn  ' + age_on('saturn', ageToTest))  |> println;
+('venus   ' + age_on('venus', ageToTest))   |> println;
+
+println 'All done first set'
+
+def agefs "earth" [<double>] seconds -> seconds / earth_year /   1;
+def agefs "mercury" [<double>] seconds -> seconds / earth_year / 0.2408467;
+def agefs "venus" [<double>] seconds -> seconds / earth_year /   0.61519726;
+def agefs "mars" [<double>] seconds -> seconds / earth_year /    1.8808158;
+def agefs "jupiter" [<double>] seconds -> seconds / earth_year / 11.862615;
+def agefs "saturn" [<double>] seconds -> seconds / earth_year /  29.447498;
+def agefs "uranus" [<double>] seconds -> seconds / earth_year /  84.016846;
+def agefs "neptune" [<double>] seconds -> seconds / earth_year / 164.79132;
+
+('mars    ' + agefs('mars',  ageToTest))   |> println;
+('earth   ' + agefs('earth', ageToTest))   |> println;
+('jupiter ' + agefs('jupiter', ageToTest)) |> println;
+('saturn  ' + agefs('saturn', ageToTest))  |> println;
+('venus   ' + agefs('venus', ageToTest))   |> println;
+
+println 'All done second set'

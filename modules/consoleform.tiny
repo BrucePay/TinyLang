@@ -1,0 +1,302 @@
+########################################################
+#
+# Module to let you build fullscreen forms on the console
+#
+########################################################
+
+import utils
+import console
+
+ConsoleForm = {
+    #
+    # Method to build a new console form
+    #
+    New: {
+        title -> {
+    
+            Title: title
+        
+            Fields: []
+        
+            #
+            # Method that lets you add a new field to a form object. A field allows the
+            # entry of data which will be returned from the form as a property
+            # named using the 'name' argument to the field.
+            #
+            AddField: {
+                 x, y, width, name, initialText, helpText ->
+        
+                    #BUGBUGBUG - add code to validate the field members
+                    field = {
+                        IsField: true
+                        x: x
+                        y: y
+                        Name: Name
+                        width: width
+                        CurrentText: "$initialText"
+                        helpText: helpText
+        
+                        #
+                        # Make this field active (called by ShowForm())
+                        #
+                        Activate: {
+                            console.Status(false, this.HelpText);
+                            fieldResult = console.ReadField(
+                                this.x,
+                                this.y,
+                                this.width,
+                                'black',
+                                'white',
+                                this.CurrentText);
+                            this.CurrentText = fieldResult.text
+                            return fieldResult
+                        }
+                    
+                        #
+                        # Render this form element on the screen
+                        #
+                        Show : {
+                                oldfg = console.GetForeGroundColor()
+                                oldbg = console.GetBackgroundColor()
+                                console.SetForeGroundColor('black')
+                                console.SetBackGroundColor('white')
+                                console.PrintAt(this.x, this.y,
+                                    this.currentText + ' ' * (this.width - this.currentText.length))
+                                console.SetForeGroundColor(oldBg)
+                                console.SetBackGroundColor(oldFg)
+                        }
+                    
+                        GetResult: {
+                            newhash(this.name, this.CurrentText)
+                        }
+                    }
+                    this.Fields.Add(field)
+                    this
+            }
+            
+            #
+            # Method to let you add a new label to a form. Labels aren't
+            # active values and don't have an Activate member.
+            #
+            AddLabel: {
+                x, y, text ->
+                    field = {
+                        IsField: false
+                        x:      x
+                        y:      y
+                        text:   text
+
+                        Show: {
+                            console.SetForeGroundColor('white')
+                            console.SetBackGroundColor('black')
+                            console.PrintAt(this.x, this.y, this.text)
+                        }
+                    }
+                    this.Fields.Add(field)
+                    this
+            }
+
+            #
+            # Method that let's you add a new button to the form. Buttons
+            # are active elements. Pressing enter or the spacebar when a button is selected
+            # Will invoke the buttons action. If the action is a lambda, the lambda will be evaluated.
+            # If it's the string 'submit', the form will exit and an object containing the form
+            # fields will be returned. If it's the string 'cancel', the form will exit and
+            # and null will be returned.
+            #
+            AddButton: {
+                x, y, width, text, action ->
+
+                    #BUGBUGBUG validate fields
+                    field = {
+                        IsField: true
+                        x:    x
+                        y:    y
+                        width: width
+                        text: text
+                        action:action
+                        formatted: null
+
+                        # Put the button text into the centered delimited format for a button
+                        GetFormattedText : {
+                            if (! (this.formatted)) {
+                                if (this.text.Length > this.Width-2) {
+                                    this.FormattedText = '[' + this.Text.Substring(0, this.Width-2) + ']'  
+                                }
+                                else {
+                                    padding = [<math>].Floor(this.width / 2) - [<math>].Floor(this.Text.length / 2)
+                                    this.formattedText = ' ' * padding + this.Text + ' ' * padding 
+                                    if (this.FormattedText.Length > this.Width-2) {
+                                        this.FormattedText = this.FormattedText.Substring(1, this.Width-2)
+                                    }
+                                    this.FormattedText = '[' + this.FormattedText + ']'
+                                }
+                            }
+                            this.formattedText
+                        }
+                        
+                        Show: {
+                            console.SetForeGroundColor('green')
+                            console.SetBackGroundColor('black')
+                            console.PrintAt(this.x, this.y, this.GetFormattedText())
+                        }
+
+                        Activate: { 
+                            console.SetForeGroundColor('black')
+                            console.SetBackGroundColor('green')
+                            try {
+                                oldCV = console.GetCursorVisible()
+                                console.SetCursorVisible(false)
+                                console.PrintAt(this.x, this.y, this.GetFormattedText())
+                                while (true) {
+                                    input = console.ReadKey(true)
+                                    # exit on any of these keys
+                                    match input
+                                    | {::key:'Tab' Modifiers:'shift'::}
+                                    | {::key:'Tab'::} 
+                                    | {::key:'UpArrow'::}
+                                    | {::key:'DownArrow'::}
+                                    | {::key:'LeftArrow'::}
+                                    | {::key:'RightArrow'::}
+                                    | {::key:'SpaceBar'::}
+                                    | {::key:'Escape'::}
+                                    | {::key:'Enter'::} -> {
+                                        break
+                                    }
+                                }
+                            }
+                            finally {
+                                this.Show()
+                                console.SetCursorVisible(oldCV)
+                            }
+                        
+                            return {key: input action: this.action}
+                        }
+
+                        GetResult: {
+                            # Add nothing to the result.
+                            {}
+                        }
+                    }
+                    this.Fields.Add(field)
+                    this
+            }
+
+            #
+            # Draws a box around the form content.
+            #
+            AddBox: {
+                x, y, length, width, color = 'gray' ->
+                    box = {
+                        IsField:    false
+                        X:          x
+                        Y:          y
+                        Width:      width
+                        Length:     length
+                        Color:      color
+
+                        Show: {
+                            console.DrawBox(this.x, this.y, this.length, this.width, this.color)
+                        }
+                    }
+                    this.Fields.Add(box)
+                    this
+            }
+
+            #
+            # Get the current value of the named field.
+            # Can be used from button actions.
+            #
+            GetField: {
+                field ->
+                    foreach (f in this.Fields) {
+                        if (f?.name == field) {
+                            return f.CurrentText
+                        }
+                    }
+                    null
+            }
+
+            #
+            # Set the value of the named field. Cane
+            # be used from buton actions
+            #
+            SetField: {
+                field, value ->
+                    foreach (f in this.Fields) {
+                        if (f?.name == field) {
+                            f.CurrentText = "$value"
+                        }
+                    }
+            }
+
+            #
+            # Render and activate the form
+            #
+            ShowForm: {
+                oldfg = console.GetForeGroundColor();
+                oldbg = console.GetBackgroundColor();
+                oldCV = console.GetCursorVisible()
+                current = 0;
+            
+                cls()
+
+                try {
+                    if (this.Title) {
+                        console.Status(true, this.Title)
+                    }
+  
+                    # Render all the form elements
+                    this.fields |> foreach { it.Show() }
+    
+                    # select the active fields (e.g. not labels)
+                    fields = this.fields |> where {it.IsField}
+
+                    while (true) {
+                        result = fields[current].Activate()
+                        match result.key
+                        | {::key:'Tab' Modifiers:'shift'::}
+                        | {::key:'UpArrow'::}
+                        | {::key:'LeftArrow'::}   -> current = (current - 1) % fields.Count
+
+                        | {::key:'DownArrow'::}
+                        | {::key:'RightArrow'::}
+                        | {::key:'Tab'::}       ->  current = (current + 1) % fields.Count
+
+                        | {::key:'SpaceBar'::} 
+                        | {::key:'Enter'::} ->{
+                            # If the current form element is a button,
+                            # process the button's action if there is one
+                            match result?.action
+                            | "submit" -> break
+                            | "cancel" -> return null
+                            | [<TinyLambda>] -> {
+                                result.action(this)
+                                console.Clear()
+                                console.Status(true, this.Title)
+                                foreach (field in this.fields) {
+                                    field.Show()
+                                }
+                            }
+                            # otherwise just move to the next element.
+                            | ->  current = (current + 1) % fields.Count
+                        }
+                    }
+                }
+                finally {
+                    console.SetCursorVisible(oldCV)
+                    console.SetForeGroundColor(oldFg)
+                    console.SetBackGroundColor(oldBg)
+                }
+    
+                # return a dictionary of the field name/value pairs
+                formResult = {}
+                foreach (f in fields) {
+                    formResult += f.GetResult()
+                }
+    
+                formResult
+            }
+        }
+    }
+}

@@ -1,0 +1,244 @@
+############################################
+#
+# A library of routines that implment an HTML DSL for Tiny.
+# There is one routine per HTML tag that either just takes
+# a literal string or is polymorphic and either takes a string or
+# an argumentless lambda that is evaluated to return
+# the tag's text.
+#
+# Example Document of some complexity:
+# 
+# htmlText = 
+#     html {
+#         head: {
+#             h1 "hello"
+#         }
+#         body: {
+#             p {
+#                 'A paragraph containing some text.'
+#                 pre 'Including preformatted text.'
+#                 'Followed by more text.'
+#             }
+#             p 'And now for a table'
+#             table {width: '30%'} {
+#                 tr {
+#                     th 'A' th 'Table' th 'Header'
+#                 }
+#                 tr {style: 'background-color:#e0e0e0' } {
+#                     td "A" td "table" td "row."
+#                 }
+#                 tr {foo:'blue' bar:13} {
+#                     td "Another" td "row" td "so there!"
+#                 }
+#             }
+#             p {style: "background-color:lightblue"} { 
+#                 'A second paragraph in blue.'
+#             }
+#         }
+#     }
+# 
+############################################
+
+import 'utils'
+
+fn style str -> "<style>\n" + (str -~ "\r") + "\n</style>"
+
+#BUGBUGBUG these could use string interpelation but not until the infinite expansion bug is fixed.
+fn h1  str  -> "<h1>\n" + str + "</h1>\n"
+fn h2  str  -> "<h2>\n" + str + "</h2>\n"
+fn h3  str  -> "<h3>\n" + str + "</h3>\n"
+fn td  str  -> "<td>\n" + str + "</td>\n"
+fn th  str  -> "<th>\n" + str + "</th>\n"
+fn b   str  -> '<b>'    + str + '</b>'
+fn pre str  -> '<pre>'  + str + '</pre>'
+fn br  str  -> str + "<br>\n"
+
+#-------------------------------------------------------
+#
+# Generate a link (anchor) tag
+#
+fn link data ->
+    match data
+    | [<IDictionary>] -> {
+        data !:> 'href' then {throw 'a: an anchor tag must contain an href'}
+        data !:> 'value' then {throw 'a: an anchor tag must contain a value'}
+        result = format('<a href="{0}"', data.href)
+        data :> 'id' then { result += format(' id="{0}"', data.id) }
+        result += format(">{0}</a>\n", data.value)
+        result
+    }
+    | null -> "a: argument cannot be null"
+    | -> throw format('a: the argument must be a dictionary, not {0}', data)
+
+#-------------------------------------------------------
+#
+# Generate a paragraph tag
+#
+fn p data {
+    match data
+    | [<string>]      -> '<p>' + (data -~ "\n\s*") + "</p>"
+    | [<tinylambda>]  -> "<p>\n" + getAll(data) + "</p>\n"
+    | [<IDictionary>] -> {
+            attrs = data |> map { format('{0}="{1}"', it.key, it.value)} |> join ' '
+            if (body == null) {
+                throw "htmlutils:p: the body of an html paragraph element cannot be null."
+            }
+            result = '<p ' + attrs + ">\n" + getAll(body) + "</p>\n" 
+            result
+    }
+    | -> throw 'p: invalid argument'
+}
+
+#-------------------------------------------------------
+#
+# Generate form tags
+#
+fn form data ->
+    match data 
+    | [<IDictionary>] -> {
+            data += {method: 'get' action: '/'}
+            format("<form action=""{0}"" method=""{1}"">\n{2}</form>\n",
+                data.Action, data.Method, data.body.DotReturnAll().join("\n"))
+    }
+    | -> throw "htmlutils:form requires a dictionary with Action and Body members"
+
+#-------------------------------------------------------
+#
+# Generate an input element
+#
+fn input data ->
+    match data
+    | [<IDictionary>] -> {
+        result = ''
+
+        # Add in the defaults for the elements not present
+        expectedTags = {
+            type:       "text"
+            value:      null
+            size:       null
+            formAction: null
+            name:       null
+            id:         null
+            label:      null
+            checked:    ""
+        }
+
+        # Make sure that only valid tags have been submitted
+        invalidTags = keys(data) |> where { expectedTags !:> it }
+        if (invalidTags) {
+            error("input: the following tags are invalid: {0}\nThe valid tags are: {1}",
+                invalidTags, keys(expectedTags))
+        }
+
+        # Add in the defaults
+        data += expectedTags
+
+        if (data.label && data.id == null) {
+            # if a label was specified but no id, synthesize an id
+            data.id = 'id'+ getrandom()
+        }
+
+        # Inject the label tag if one was requested
+        if (data.label) {
+            result += format("<label for=""{0}"">{1}</label>\n", data.id, data.label)
+        }
+        
+        # format the string with optional bits
+        result += format('<input type="{0}"', data.Type)
+        result += (data.value       then format(' value="{0}"', data.value))
+        result += (data.Name        then format(' name="{0}"',  data.Name))
+        result += (data.Size        then format(' size="{0}"',  data.Size))
+        result += (data.id          then format(' id="{0}"',    data.id))
+        result += (data.formAction  then format(' formaction="{0}"', data.formAction))
+        result += (data.Checked     then format(' Checked="{0}"', data.Checked))
+        result += ">\n"
+        
+        # Return the aggregate string
+        result
+    }
+    | -> throw "htmlutils:input requires a dictionary with Type, Value, Size and Name members"
+
+#------------------------------------------------------
+#
+# Generate table row tags
+#
+fn tr data ->
+    match data
+    | [<string>]      -> format("<tr>\n{0}</tr>\n",  data -~ "\n\s*")
+    | [<tinylambda>]  -> format("<tr>\n{0}</tr>\n", getAll(data))
+    | [<IDictionary>] ->
+        if (body == null) {
+            throw "htmlutils:tr: the body of an html <tr> element cannot be null."
+        }
+        else {
+            format("<tr {0} >\n{1}</tr>\n",
+                data |> map { format('{0}="{1}"', it.key, it.value)} |> join ' ',
+                getAll(body))
+        }
+    | -> throw format('htmlutils:tr: invalid argument: {0}', data)
+
+#------------------------------------------------------
+#
+# Generate a table element from the collection
+# of data provided. You may optionally put a
+# dictionary of attributes before the table body.
+# e.g. table {width:  '100%'} { ...body content... }
+#
+fn table data {
+    match data
+    | [<string>]      -> "<table>\n" + (data -~ "\n\s*") + "</table>\n"
+    | [<tinylambda>]  -> "<table>\n" + getAll(data) + "</table>\n"
+    | [<IDictionary>] ->
+        if (body == null) {
+            throw "htmlutils:table: the body of an html table cannot be null"
+        }
+        else {
+            format("<table {0}>\n{1}\n</table>\n",
+                data |> map { format('{0}="{1}"', it.key, it.value)} |> join ' ',
+                getAll(body))
+        }
+    | -> throw 'table: invalid argument'
+}
+
+#------------------------------------------------------
+#
+# Generate a div HTML element
+#
+fn div data {
+    match data
+    | [<string>]      -> "<div>\n" + (data -~ "\n\s*") + "</div>\n"
+    | [<tinylambda>]  -> "<div>\n" + getAll(data) + "</div>\n"
+    | [<IDictionary>] ->
+            if (body == null) {
+                throw "htmlutils:div: the body of an html div cannot be null"
+            }
+            else {
+                attrs = data |> map { format('{0}="{1}"', it.key, it.value)} |> join ' '
+                format("<div {0}>\n{1}</div>\n", attrs, getAll(body)) 
+            }
+    | -> throw 'div: invalid argument'
+}
+
+#------------------------------------------------------
+#
+# Get the output of all of the statements in the lambda provided.
+#
+fn getAll stmtList {
+    match stmtList
+    | [<TinyLambda>] -> stmtList.DotReturnAll() |> flatten |> join "\n" |> AddPass "\n"
+    | null -> throw 'getAll: stmtList argument was null'
+    | -> throw format("getAll: stmtList was not a TinyLambda object: '{0}'", stmtList)
+}
+
+#------------------------------------------------------
+#
+# The top-level document tag; takes a hashtable with members "head" or
+# "body" which are lambdas that return the content for the document.
+#
+fn html document ->
+    format("<html>\n<head>\n{0}</head>\n<body>\n{1}</body>\n</html>\n",
+        ((if (document.head is [<string>]) {document.head} else {getAll(document.head)})),
+        (getAll(document.body)))
+
+
+

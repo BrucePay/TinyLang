@@ -1,0 +1,60 @@
+################################################################
+#
+# An implementation of Cellular Automata in Tiny; after
+# a similar Haskell example.
+#
+################################################################
+
+#
+# Process the args
+#
+width::gen::_ = args
+width ?= 20
+gen   ?= 20
+
+#
+# Define the rules for the automaton.
+#
+def rule ' ' ' ' ' ' -> [' ']
+def rule ' ' ' ' 'X' -> ['X']
+def rule ' ' 'X' ' ' -> [' ']
+def rule ' ' 'X' 'X' -> ['X']
+def rule 'X' ' ' ' ' -> ['X']
+def rule 'X' ' ' 'X' -> [' ']
+def rule 'X' 'X' ' ' -> ['X']
+def rule ' ' 'X' 'x' -> ['X']
+def rule 'X' 'X' 'X' -> [' ']
+
+# Function set to compute the next cycle
+def next null:: _ -> [" "]
+def next a::b::c::rest -> rule(a, b, c) + next([b, c] + rest)
+
+# Function to generate a random starting row
+def startGen n -> getRandom(n).map{if (it % 2 == 0) { 'X' } else { ' ' }};
+
+# The original Haskell code is:
+#     rows n = take n $ iterate (\x -> ' ' : next x) $ startGen n
+# The Tiny code is longer because it has no equivalent to the iterate
+# function (nor does it have infinite lists).
+
+def rows width gen {
+    # Generate the starting row.
+    val = startGen(width);
+    # Compute the requested number of iterations.
+    [1..gen].ForEach {
+                val = next(val);
+                # If everything is dead, then break the loop early
+                val.All{it == ' '} then { break }
+                # Print the current iteration
+                println('Gen: {0,3} [{1}]', it, +val)
+            }
+}
+
+Alert("Starting run; width: {0} iterations: {1}", width, gen)
+
+rows(width, gen)
+
+Alert("Done.")
+
+
+

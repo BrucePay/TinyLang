@@ -1,0 +1,16 @@
+########################################################################
+#
+# Implementation of the "fizzbuzz" coding "test"
+#
+########################################################################
+
+fn fizzBuzz x -> 
+    match x
+    | {it % 15 == 0} -> println( "fizzbuzz" ) 
+    | {it % 3 == 0}  -> println( "fizz" ) 
+    | {it % 5 == 0}  -> println( "buzz" ) 
+    |                -> println(x)
+
+range(1,20).foreach{ fizzbuzz(it) }
+
+

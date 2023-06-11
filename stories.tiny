@@ -1,0 +1,63 @@
+#################################################################
+#
+# A script that generates random "fairytale" stories from text
+# fragments.
+#
+#################################################################
+
+# Utility to randomly choose an item from a list
+fn choose list -> list[getrandom(list.Count+1)[-1]-1]
+
+# Function to generate a single story from a set of fragments
+fn stories ->
+    choose(['There once was ', 'Once upon a time, there was ', 'Yesterday, there was '])  +
+    choose(['a princess ', 'a cat ', 'a pony ', 'a little girl ', 'an evil witch ']) +
+    'who lived in ' +
+    choose(['a shoe.', 'a castle.', 'an enchanted forest.', 'a midtown condo.']) +
+    ' She found a ' +
+    choose(['giant ', 'frog ', 'treasure chest ', 'cute little bunny ']) + 
+    choose(['when she got lost ', 'while strolling along ']) +
+    choose(['and immediately regretted it. ', 'and thought it was deeply amusing. ', 'and was very afraid. ']) +
+    ' Then a ' +
+    choose(['lumberjack ', 'wolf ', 'magical pony ', 'great eagle ']) +
+    'named ' +
+    choose(['Charlie ', 'Pinkie Pie ', 'Little John ', 'Boris ', 'Charlie ']) +
+    'found them and ' +
+    choose(['saved the day.', 'granted them three wishes.', 'told them a story.', 'made them lunch.']) +
+    ' The end'
+
+#
+# Print out the nth story.
+#
+fn printStory n {
+    if (1..100 !:> n) {
+        info "You can only choose stories from 1-100."
+    }
+    else {
+        info ("\nStory #$n\n")
+        foreach (line in storyList[n-1].Split('.').Trim()) {
+            println('    {0}.', line)
+        }
+    }
+}
+
+#
+# Generate the story database
+#
+println("Generating stories...")
+storyList = [1..100].map{ stories() }
+len = getLength(storyList)
+println("Done! OK - let's go!\n")
+
+#
+# The command loop
+#
+while(true) {
+    match readline("\nEnter a number from 1 to $len (or 'q' to quit) # ").Trim()
+    | 'q'           -> { info('Bye bye!'); break }
+    | r/[0-9]+/:sid -> printStory([<int>](sid[0]))
+    | r/^.+$/:cmd   -> info "I don't understand the command '${cmd[0]}'. Please enter a number"
+    |               -> printStory(getrandom(storyList.Count)[0]-1)
+}
+
+

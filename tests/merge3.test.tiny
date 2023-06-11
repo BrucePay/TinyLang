@@ -1,0 +1,131 @@
+######################################################################
+#
+# Haskell-style implementation of the classic merge sort algorithm. This
+# implementation uses function sets and parameter patterns to manipulate the
+# lists.
+#
+#######################################################################
+
+import 'math'
+import 'utils'
+import 'io'
+import 'tinytestutils'
+
+undef merge
+undef mergesort1
+
+# BUGBUGBUG - these need to be here because the 'suite' function isn't defining them properly in it's scope.
+
+# Define the merge function.
+def merge [] xs         -> xs
+def merge xs []         -> xs
+def merge x::xs y::ys   -> if (x > y) {y :+ merge(x :+ xs, ys)}
+                           else       {x :+ merge(xs, y :+ ys)}
+
+# Define the merge sort which with uses the merge function as an infix operator.
+def mergesort1 []        -> []
+def mergesort1 x::[]     -> x
+def mergesort1 x::y::[]  -> x `merge` y
+def mergesort1 x::y::z   -> x `merge` y `merge` mergesort1(z)
+
+# Driver for the merge sort that splits the input collection into a list of lists of length 1.
+fn mergesort list -> mergesort1(list / 1)
+
+suite 'HaskellStyleMergeSort' {
+
+    # Test the merge function
+    test 'TestMergeFunction1' {
+        test:       { merge([1,2,5,8,9], [3, 4, 6, 7, 10]) }
+        Expected:   [1..10]
+    }
+
+    test 'TestMergeFunction2' {
+        test:       { merge([1,2,5,8,9], []) }
+        Expected:   [1, 2, 5, 8, 9]
+    }
+
+    test 'TestMergeFunction3' {
+        test:       { merge([], [1,2,5,8,9]) }
+        Expected:   [1, 2, 5, 8, 9]
+    }
+
+    test 'TestMergeFunction4' {
+        test:       { merge([], []) }
+        Expected:   []
+    }
+
+    # Test the merge function as an infix operator
+    test 'TestMergeFunction5' {
+        test:       { [1,2,5,8,9] `merge` [3, 4, 6, 7, 10] }
+        Expected:   [1..10]
+    }
+
+    test 'TestMergeFunction6' {
+        test:       { [1,2,5,8,9] `merge` [] }
+        Expected:   [1, 2, 5, 8, 9]
+    }
+
+    test 'TestMergeFunction7' {
+        test:       { [] `merge` [1,2,5,8,9] }
+        Expected:   [1, 2, 5, 8, 9]
+    }
+
+    test 'TestMergeFunction8' {
+        test:       { [] `merge` [] }
+        Expected:   []
+    }
+
+    # Test the merge function with the function application operator
+    test 'TestMergeFunction9' {
+        test:       { [1,2,5,8,9] |> merge([3, 4, 6, 7, 10]) }
+        Expected:   [1..10]
+    }
+
+    test 'TestMergeFunction10' {
+        test:       { [1,2,5,8,9] |> merge([]) }
+        Expected:   [1, 2, 5, 8, 9]
+    }
+
+    test 'TestMergeFunction11' {
+        test:       { [] |> merge([1,2,5,8,9]) }
+        Expected:   [1, 2, 5, 8, 9]
+    }
+
+    test 'TestMergeFunction12' {
+        test:       { [] |> merge([]) }
+        Expected:   []
+    }
+
+    # Now test the mergesort function on various datasets.
+
+    data = getrandom(10)
+    test 'TestMergeSort1' {
+        test: { mergesort(data) }
+        expected: data |> sort
+    }
+
+    data = getrandom(13)
+    test 'TestMergeSort2' {
+        test: { mergesort(data) }
+        expected: data |> sort
+    }
+
+    data = getrandom(21)
+    test 'TestMergeSort3' {
+        test: { mergesort(data) }
+        expected: data |> sort
+    }
+
+    data = getrandom(30)
+    test 'TestMergeSort4' {
+        test: { mergesort(data) }
+        expected: data |> sort
+    }
+
+    test 'TestMergeSort5' {
+        test: { mergesort([]) }
+        expected: []
+    }
+}
+
+

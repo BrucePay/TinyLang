@@ -1,0 +1,57 @@
+#######################################################
+#
+# Test the parser's error handling by generating random
+# sets of words and passing them to the parser (fuzzing).
+#
+#######################################################
+
+import IO
+import Utils
+import Math
+import tinytestutils
+
+#
+# First get a collection of words taken from the tiny source
+#
+words = 'tiny.ps1'
+        |> readfile
+        |> replace r/\$/  # get rid of dollar - it causes immediate parse failures
+        |> split r/[ \r\n\t]+/
+        |> flatten
+        |> distinct
+
+suite 'Parse Random Text' {
+    foreach (iter in 1..200) {
+        #
+        # Pick 20 words at random and pass them to the parser. Words are
+        # joined by either newlines or spaces at random.
+        #
+        testtext =  getrandom(20, 0, words.Count-1)
+                |> map { words[it] }
+                |> join((if (getrandom(1, 0, 100) > 50) { ' ' } else { "\n" }))
+    
+        test "Random Parse Test $iter" {
+            test: {
+                try {
+                    # nest scope one level to avoid accidental function overwrites
+                    # however unlikely they may be.
+                    { _ = parse(testtext) }()
+                }
+                catch {
+                    # We expect two types of errors. Anything else is a test failure.
+                    if (it is [<IncompleteParseException>] || it is [<TinyException>]) {
+                        return true
+                    }
+                    else {
+                        return ("BAD EXCEPTION: ${it.GetType()}\n" +
+                            it |> shell 'fl -force * | out-string')
+                    }
+                }
+                # Very occasionally we get a parse that succeeds so return true.
+                true
+            }
+            Expected: true
+        }
+    }
+}
+

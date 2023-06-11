@@ -1,0 +1,32 @@
+###############################################################
+#
+# The following program calculates the smallest number of people
+# in a room for whom the probability of completely unique birthdays
+# is less than 50% (the birthday problem, where for 1 person the
+# probability is 365/365 (or 100%), for 2 it is 364/365, for 3
+# it is 364/365 it is 363/365, etc.) (answer = 23).
+#
+# This example is adapted from the Ocaml example included in the
+# Ocaml Wikipedia entry.
+#
+###############################################################
+
+year_size = 365
+
+fn birthday_paradox prob people {
+    # use immediately-invoked lambda to avoid having
+    # to reassign prob
+    { prob -> 
+        if (prob < 0.5) {
+            println("answer = {0}\n", people+1)
+        }
+        else {
+            warn("Recursing with people == {0}", people+1)
+            birthday_paradox(prob, people+1)
+        }
+    } ((year_size - people) / year_size * prob)
+}
+
+birthday_paradox(1.0, 1)
+
+

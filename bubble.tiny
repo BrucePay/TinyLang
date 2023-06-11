@@ -1,0 +1,40 @@
+##############################################
+#
+# Bubble sort implementation in Tiny
+#
+##############################################
+
+#
+# Does an in-place bubble sort of the argument list
+#
+fn bubble lst {
+    max = lst.Count-1
+    # iterate over increasingly short segments as the largest
+    # values bubble up to the end of the list.
+    while (max > 0) {
+        index = 0
+        # Move the largest element to the end of the list
+        # by swapping pairs.
+        while (index < max) {
+            if (lst[index] > lst[index+1]) {
+                temp = lst[index]
+                lst[index] = lst[index+1]
+                lst[index+1] = temp
+            }
+
+            index += 1
+        }
+
+        max -= 1
+    }
+
+    # return the sorted list
+    lst
+}
+
+alert('Using bubble sort to sort 50 items.')
+time {
+    getrandom(50)  |> bubble |> println
+}
+
+

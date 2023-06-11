@@ -1,0 +1,68 @@
+#################################################################################
+#
+# Tree traversal example
+#
+#################################################################################
+
+import utils
+
+fn RecurseTraverse tree {
+    if (tree == null) { return []}
+    []
+    + RecurseTraverse(tree.left)
+    + tree.val
+    + RecurseTraverse(tree.right)
+}
+
+
+fn traverseTree tree {
+    stack = []
+    result = []
+
+    while (true) {
+        while (tree != null) {
+            stack.push(tree)
+            tree = tree.Left
+        }
+
+        if (tree == null && stack.Count == 0) {
+            break
+        }
+
+        tree = stack.pop()
+        result.Add(tree.Val)
+        tree = tree.right
+    }
+    return result
+}
+
+
+tree = { val: 1
+         left:  { val:2
+                  left: { val: 3
+                          Left: null
+                          Right: { val: 17; left:null right:null }
+                        }
+                  right: { val: 4
+                           Left: null
+                           Right: null
+                         }
+                }
+        right:  { val: 5
+                  left: null
+                  right: { Val: 6
+                           left: {val:20 left:null right:null}
+                           right:null
+                         }
+                }
+       }
+
+Alert("Recursive")
+RecurseTraverse(tree) |> println
+
+Alert("Non-recursive")
+TraverseTree(tree) |> println 
+
+testTree = utils.GenerateRandomTree(5)
+Alert("Should be true:")
+TraverseTree(testTree) == RecurseTraverse(testTree)

@@ -1,0 +1,286 @@
+##################################################################
+#
+# Test driver script for Tiny tests.
+# This script does 3 things:
+# 1. it extracts and run the embedded tests in 'tiny.ps1'
+# 2. If validates the examples used in generating the documentation.
+# 3. Runs all scripts with a .test.tiny extension. These scripts
+#    must contain test suites is implemented by the 'testutis' modules.
+#
+##################################################################
+
+import 'IO'
+import 'utils'
+import 'web'
+
+__tinytest_options = Utils.GetOpts('tinytest', args, {
+        pattern:  ''
+        syntax:   false
+        nodocs:   false
+        external: true
+        verbose:  false
+    })
+
+# Option error. GetOpts will have alerted the user so just exit.
+if (__tinytest_options == null) {
+    return null
+}
+
+alert("\nTiny Test Driver 0.1\n")
+
+if (__tinytest_options.Syntax) {
+    Alert("Only doing syntax checks.")
+}
+else {
+    if (__tinytest_options.Pattern) {
+        Alert("Running tests matching '{0}'", __tinytest_options.pattern)
+    }
+    else {
+        Alert("Running all tests.")
+    }
+}
+
+sw = Utils.NewStopWatch()
+
+sw.Start()
+
+AllLines = IO.ReadAllLines('tiny.ps1')
+
+nameWidth   = 30
+numtests    = 0
+numfailed   = 0
+failedTests = {}
+allTests    = {}
+duplicates  = {}
+success     = true
+total_tests = 0
+
+if (__tinytest_options.syntax == false) {
+    # If syntax option is not specified, extract and run all tests
+    AllLines
+        .matchall('^ *#[TWU]')
+        .ForEach {
+            if (it ~ r/^ *#([WTUXM]) *([a-z0-9_]+) +(.*$)/ ) {
+                target = matches[1]
+                testname = matches[2]
+                testtext = matches[3]
+
+                # Only run tests whose names match the pattern
+                if (testname ~ __tinytest_options.pattern) {
+                    numtests += 1
+                    allTests :> testname then {
+                        duplicates[testname] += 1
+                        warn("DUPLICATE test name '{0}'", testname)
+                    }
+
+                    allTests[testname] += 1
+                    testexpr = null
+
+                    # There should be no platform-specific parsing
+                    # so parse all tests even if they're not marked for this platform.
+                    try {
+                        testexpr = parse(testtext)
+                    }
+                    catch {
+                        numfailed += 1
+                        failedTests[testname] = it
+                        error("Test: {0} parse failed on '{1}'", testname, testtext)
+                    }
+
+                    # See if we should run this test based on OS we're on.
+                    shouldRun =
+                                (target == 'T' ||
+                                (target == 'W' && IsWindows) ||
+                                (target == 'M' && IsMacOS) ||
+                                (target == 'X' && IsLinux) ||
+                                (target == 'U' && ! IsWindows))
+
+#info "test type '$target' windows: ${(target == 'w' && IsWindows)}  shouldRun = $shouldRun testtext= '${testtext}"
+
+                    if (shouldRun && testexpr != null) {
+                        exception = '<no exception>'
+                        # Invoke the test expression in its own scope
+                        try {
+                            testresult = { testexpr.eval() }()
+                        }
+                        catch {
+                            testresult = null
+                            exception  = it
+                        }
+
+                        if (testresult == true) {
+                            if (__tinytest_options.verbose == true) {
+                                println("Test {0}: passed", testname.padright(nameWidth))
+                            }
+                            else {
+                                print('.')
+                            }
+                        }
+                        else {
+                            numfailed += 1
+                            error("Test {0}: failed! Test body: '{1}' exception: {2}",
+                                testname.padright(nameWidth), testtext, exception)
+                            #BUGBUG failedTests.(testname) should have worked, not created a key 'testname'
+                            failedTests[testname] = testtext + "\n" + exception
+                        }
+                    }
+                }
+            }
+        }
+
+    sw.Stop()
+    alert("\nTotal number of tests: {0} Passed: {1} Failed: {2} Duration: {3}",
+        numtests, numtests - numfailed, numfailed, sw.Elapsed.TotalMilliseconds)
+    if (numfailed > 0) {
+        error("Some tests failed!")
+        failedTests |> OutHost()
+        success = false
+    }
+
+    if (duplicates.Count > 0) {
+        warn("There were duplicate test names")
+        duplicates |> OutHost()
+        success = false
+    }
+
+    total_tests += numtests
+}
+
+#-------------------------------------------------------------------------
+#
+# Now extract all of the examples in '<pre> ... </pre>' tags from the source
+# and make sure they parse properly.
+#
+
+alert("\nPhase 2: Validating syntax for embedded examples in comments.\n");
+
+sw.Reset()
+sw.Start()
+
+examples = 0;
+example_errors = 0;
+
+(readtext('tiny.ps1') *~ '<pre>([^<]*)</pre>').foreach {
+    if (it) {
+        examples += 1;
+        text = it.groups[1]
+        try {
+            _ = parse(web.htmldecode(text)) # Parse the text but discard the result
+        }
+        catch {
+            error('Failed to parse: ' + text + "\n" + it );
+            example_errors += 1
+            success = false
+        }
+    }
+}
+
+sw.Stop()
+alert("Number of examples processed: {0} Number of errors: {1} Duration {2}",
+    examples, example_errors, sw.Elapsed.TotalMilliseconds)
+total_tests += examples
+
+#-------------------------------------------------------------------------
+#
+# Finally extract and validate all of the examples in the generated HTML
+# documentation file.
+#
+
+alert("\nPhase 3: Validating syntax for embedded examples in HTML document.\n");
+
+sw.Reset()
+sw.Start()
+
+examples = 0;
+example_errors = 0;
+
+srcFiles = ['tiny.ps1', 'tinydoc.ps1']
+docsFile = IO.JoinPath(tinyhome, 'Tiny Documentation.html') ;
+
+# Update the documentation HTML file if either of the source files are out of date.
+srcFiles.Any { IO.newer(it, docsfile) } then {
+    warn("The file '${io.BaseName(docsFile)}' is out-of-date WRT the src files '$srcFiles''")
+    if (__tinytest_options.nodocs == false) {
+        call 'tinydoc'
+    }
+    else {
+        warn("Option.Nodocs was true so skipping docs update.")
+    }
+};
+
+# Extract all of the examples in the examples column of the doc and verify them.
+(readtext(docsFile) *~ '<td> *<pre>([^<]*)</pre> *</td>').foreach {
+    if (it) {
+        examples += 1;
+        text = it.groups[1];
+        try {
+            _ = parse(web.htmldecode(text)) # Parse the text but discard the result
+        }
+        catch {
+            error("Failed to parse: {0} ({1})\n{2}", text, web.htmldecode(text), it );
+            example_errors += 1
+            success = false
+        }
+    }
+}
+
+sw.Stop()
+alert("Number of examples processed: {0} Number of errors: {1} Duration {2}",
+    examples, example_errors, sw.Elapsed.TotalMilliseconds)
+total_tests += examples
+
+
+#-------------------------------------------------------------------------
+#
+# Run all of the external tests
+#
+
+if (__tinytest_options.External) {
+    alert("\nPhase 4: Running External Tests\n")
+
+    # Initialize a dictionary to hold accumulated errors from
+    # test files.
+    AllErrors = {}
+    AllTests  = {}
+
+    testDir = IO.JoinPath(tinyhome, 'tests')
+    IO.files('*.test.tiny', testDir) |> map {
+        testFileName = it
+        testName     = (testFileName |> IO.BaseName |> Replace r/\.test\.tiny$/) + ':'
+        alert("Running test file '{0}'", it)
+        try {
+            # Test functions return dictionaries, not lists
+            # so we need to use '|> foreach' instead of '. foreach'
+             call(testFileName) |> foreach {
+                AllTests[ testName + it.Key ] = it.Value
+                if (it.Value.Passed == false) {
+                    success = false
+                    AllErrors[ testName + it.Key ] = it.Value
+                }
+            }
+        }
+        catch {
+            error("Errors occurred running file " + IO.basename(it))
+            AllErrors[testname + 'Exception'] = it
+            success = false
+        }
+    }
+
+    if (AllErrors.Count > 0) {
+        error("Some test files failed! Aggregate errors:")
+        AllErrors |> OutHost
+        __global.TestFailures = AllErrors
+    }
+    total_tests += getLength(AllTests)
+}
+
+Alert("Total tests run: {0}", total_tests);
+
+if (not(success)) {
+    error("There were errors; returning false")
+}
+else {
+    alert("No errors, returning true")
+}
+
+return success

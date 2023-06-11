@@ -1,0 +1,1040 @@
+###############################################################
+#
+# A simple quasi-fullscreen editor written in Tiny somewhat
+# inspired by VI. For example, it is a modal editor with
+# visual and command modes. In visual mode ':' takes you to
+# command mode. To quit the editor simply type 'q<enter>' in command
+# mode or ':q<enter>' in visual mode. You can get help at anytime
+# by either pressing '?' in visual mode or entering the command
+# ?<enter> in command mode.  
+#
+###############################################################
+
+import math
+import console
+import utils
+import io
+
+fileName = head(args) ?? 'newfile.txt'
+
+view   = NewView(NewEditBuffer(fileName))
+
+console.SetCursorVisible(false)
+VisualMode()
+console.SetCursorVisible(true)
+
+########################################################
+#
+# The controller/command processor for the editor. The editor
+# has two interpreters - a keystroke interpreter for visual mode
+# and a line-mode interpreter for command mode.
+#
+
+#
+# Keystroke  interpreter for visual mode 
+#
+fn VisualMode {
+    View.Render()
+    status("Visual mode.")
+    # Digit buffer is used to hold the digits for commands requiring a number.
+    digitBuffer = ''
+
+    while (true) {
+        try {
+            #BUGBUGBUG used to be able to use match (key = teReadKey()). Find what changed.
+            key = teReadKey()
+            match key
+            #v DownArrow, lowercase j - Move the cursor down a line.
+            | 'DownArrow' | r/j/c -> view.ShowLine(view.editor.Cursor + 1)
+
+            #v UpArrow - Move the cursor up a line.
+            | 'UpArrow'   | 'b' | 'k' -> view.ShowLine(view.editor.Cursor - 1)
+
+            #v PageUp - Page up a screen.
+            | 'PageUp' | 'b'  | '-' -> view.PageUp()
+
+            #v PageDown - Page down a screen.
+            | 'PageDown' | 'f'| '+' | 'Enter'  -> view.PageDown()
+
+            #v Home - Go to the first line in the file.
+            | 'Home'        -> GoToSpecifiedLine(0)
+
+            #v End - Go to the last line in the file.
+            | 'End'         -> GoToSpecifiedLine(view.editor.Buffer.Count)
+
+            #v r - Refresh/redraw the screen.
+            | 'r'           -> View.Render() do Status()
+
+            #v e - Edit the current line.
+            | 'e'           -> EditCurrentLine()
+
+            #v d - Delete the current line.
+            | 'd'           -> DeleteCurrentLine()
+
+            #v c - Cut the current line.
+            | 'c'           -> CutCurrentLine()
+
+            #v a - Append text after the current line.
+            | 'a'           -> appendText()
+
+            #v ? - Show this help text.
+            | '?'           -> ShowHelp()
+
+            #v u - Undo the last change.
+            | 'u'           -> undo()
+
+            #v j - Join the current and next lines.
+            | r/J/c           -> JoinLines()
+
+            #v BackSpace - Delete the last digit in the digit buffer.
+            | 'Backspace'   -> if (digitBuffer) {
+                                digitBuffer?.Substring(0, digitBuffer?.length-2)
+                                Status('number: ' + digitBuffer)
+                            }
+
+            #v 0..9 - Add a digit to the digit buffer.
+            | r/^[0-9]$/    -> (digitBuffer += key) do Status('number: ' + digitBuffer)
+
+            #v Escape - Clear the digit buffer.
+            | 'Escape'      -> (digitBuffer = '') do Status('number cleared.')
+
+            #v g - Go to the line specified by the digit buffer.
+            | 'g'           -> {
+                                   lineNo = [<int>] digitBuffer
+                                   digitBuffer = ''
+                                   if (lineno != null) {
+                                       GoToSpecifiedLine(lineno)
+                                   }
+                                   status("Moved to line $lineno")
+                               }
+
+            #v / - Search for a regular expression in the buffer.
+            | '/'           -> {
+                                   status('Enter a pattern to search for.')
+                                   pattern = cmdprompt '/'
+                                   SearchForARegex(pattern)
+                               }
+
+            #v n - Find the next matching line using the last pattern specified.
+            | 'n'           -> FindNextMatch()
+
+            #v y - Yank the current line.
+            | 'y'           -> view.editor.Yank(view.editor.Cursor, 1) do status("Yanked 1 lines.")
+
+            #v p - Paste the yank buffer.
+            | 'p'           -> PasteYankBuffer()
+
+            #v : - Run a command in command mode.
+            | ':'           -> CmdMode()
+
+            # default -> issue unknonw command message.
+            |               -> Status "Unknown command key: '$key'"
+         }
+         catch {
+            status(it)
+        }
+    }
+}
+
+########################################################
+#
+# Command interpreter for command mode commands.
+#
+fn CmdMode {
+
+    try {
+
+        status("Command mode.")
+
+        # Read a command
+        cmd = cmdprompt()
+
+        match cmd
+        #H q - Quit the editor
+        | 'q'                 -> {
+                                 if (view.editor.Dirty) {
+                                     answer = readline("You have unsaved changes, do you want to " +
+                                        "exit without saving the changes? (y/N) ")
+                                     if (answer !~ '^ *y') {
+                                        view.Render()
+                                        status 'Exit cancelled'
+                                        continue
+                                     }
+                                  }
+                                  break
+                              }
+
+        #H q! - Force-quit the editor.
+        | 'q!'                -> break
+
+        #H newline - Show the next page of the file.
+        | ''                  -> view.PageDown()
+
+        #h b - Back up a page
+        | 'b'                 -> view.PageUp()
+
+        #h - Backup half a page
+        | '-'                 -> View.HalfPageUp()
+
+        #h + - Move forward half a page
+        | '+'                 -> View.HalfPageDown()
+
+        #h end - Go to the last line.
+        | 'end'               -> view.ShowLine(view.editor.Length()-1)
+
+        #h ! expr - Evaluate a Tiny expression.
+        | r/^!(.*)$/          -> {
+                                try {
+                                    matches[1] |> eval |> OutHost;
+                                    warn("Hit enter to continue");
+                                    _ = readline("-> ");
+                                    View.Render();
+                                    Status("Command complete.")
+                                }
+                                catch {
+                                    View.Render()
+                                    Status(it.ToString())
+                                }
+                              }
+
+        #h <number> - Goto the specified line number
+        | r/^([0-9]+)$/       -> {
+                                lineno = number(matches[1])
+                                GoToSpecifiedLine(lineno)
+                              }
+
+        #h /pattern - Search for a regular expression pattern
+        | r/^//(.+)$/         -> {
+                                pattern = matches[1]
+                                SearchForARegex(pattern)
+                              }
+
+        #h /  - Find the next instance of the regular expression
+        | '/'                 -> FindNextMatch()
+
+
+        #h s/pat/replace/ - Replace text in the current line
+        | r/^s//(.*)//(.*)///  -> {
+                                try {
+                                    pat = regex(matches[1])
+                                }
+                                catch {
+                                    status("Replace Current Line operation failed: $it,")
+                                    return
+                                }
+                                
+                                view.editor.PushUndo()
+                                view.editor.Buffer[view.editor.Cursor] =
+                                    view.editor.Buffer[view.editor.Cursor] -~ [pat, matches[2]]
+                                view.Render()
+                                status(format("Replaced text."))
+                              }
+
+        #h n/pat/replace/ - Replace matching text for n lines starting at the cursor line
+        | r/^([0-9]+)s//(.*)//(.*)/// -> {
+                                cnt = [<int>] (matches[1])
+                                if (cnt == 0) {
+                                    return
+                                }
+
+                                buflen = view.Editor.Buffer.Count
+                                cursor = view.Editor.Cursor
+                                end = cursor + cnt - 1
+                                if (end >= buflen) {
+                                    end = buflen-1
+                                }
+
+                                try {
+                                    pat = regex(matches[2])
+                                }
+                                catch {
+                                    status("Replace N operation failed: $it,")
+                                    return
+                                }
+
+                                lines = cursor .. end
+                                numLinesChanged = view.editor.ReplaceMultiple(lines, pat, matches[3]);
+                                view.Render()
+                                status("Replaced $numLinesChanged lines.");
+                              }
+
+        #h */pat/replace/ - Replace matching text for all the lines in the buffer
+        | r/^%s//(.*)//(.*)///  -> {
+                                try {
+                                    pat = matches[1]
+                                    numLinesChanged = view.editor.ReplaceAll(pat, matches[2]);
+                                    view.Render()
+                                    status("Replaced $numLinesChanged lines.");
+                                }
+                                catch {
+                                    status("Replace All operation failed: $it")
+                                }
+                            }
+
+        #h new  - Start editing a new file
+        | 'new'               -> NewEditBuffer()
+
+        #h status - Show the editor status
+        | 'status'            -> {
+                                println (view.editor.Status())
+                                _ = readline("\n<press enter to continue>")
+                                view.Render()
+                                status()
+                              }
+
+        #h ? - Show editor help
+        | '?'                 -> ShowHelp()
+
+        #h a - Append lines at the current line
+        | 'a'                 -> appendText()
+
+        #h e - Edit the current line
+        | 'e'                 -> editCurrentLine()
+
+
+        #h y - Yank the current line
+        | 'y'                 -> view.editor.Yank(view.editor.Cursor, 1) do status("Yanked 1 line.")
+
+        #h y n - Yank n lines
+        | r/^y +([0-9]+)/:num -> {
+                                numLinesToYank = num[1] as [<int>]
+                                view.editor.Yank(view.editor.Cursor, numLinesToYank)
+                                status(format("Yanked {0} lines.", view.editor.YankBuffer.Count))
+                           }
+
+        #h p - Paste the yank buffer
+        | 'p'                 -> PasteYankBuffer()
+
+
+        #h d - Delete the current line
+        | 'd'                 -> DeleteCurrentLine()
+
+        #h d <number> - Delete <number>  lines
+        | r/^d *([0-9]+)$/:num -> {
+                                numLinesToDelete = num[1] as [<int>]
+                                cursor = view.editor.Cursor
+                                view.editor.Delete(numLinesToDelete)
+                                view.Render()
+                                status(format("Deleted {0} lines, buffer length is now {1} lines long.",
+                                    numLinesToDelete, view.editor.length()))
+                           }
+
+        #h c - Cut the current line (put it in the yank buffer then delete it.)
+        | 'c'              -> CutCurrentLine()
+
+        #h c n - Cut n lines (move them to the yank buffer.
+        | r/^c *([0-9]+)$/:num -> {
+                            numLinesToCut = num[1] as [<int>]
+                            cursor = view.editor.cursor
+                            view.editor.Yank(view.editor.Cursor, numLinesToCut)
+                            view.editor.Delete(view.editor.Cursor, numLinesToCut)
+                            View.Render()
+                            status(format("Cut {0} lines, buffer length is now {1}.",
+                                numLinesToCut, view.editor.length))
+                         }
+
+        #h undo - Undo the last operation that changed the buffer.
+        | 'undo'         -> undo()
+
+        #h run - Execute the current buffer as a Tiny script
+        | 'run'          -> {
+                              view.editor.Save()
+                              run(view.editor.fileName)
+                              readline('<Press enter to continue>')
+                              view.Render()
+                              Status("Run complete.")
+                         }
+
+        #h parse - Try parsing the current buffer as a tiny script.
+        | 'parse'        -> {
+                              str = view.editor.Buffer |> Join "\n"
+                              parse(str)
+                              readline('<Hit the enter key to continue>')
+                         }
+
+        #h w - Write the current buffer to the originiating file.
+        | 'w'            -> {
+                                try {
+                                    view.editor.Save()
+                                    status(format("File '{0}' saved.", view.editor.FileName))
+                                }
+                                catch {
+                                    Status(format("An error occurred saving file '{0}': {1}",
+                                        view.editor.FileName, it))
+                                    TinyError |> outhost
+                                }
+                            }
+
+        #h w - Write the current buffer to the originating file then exit the editor.
+        | 'wq'            -> {
+                                try {
+                                    view.editor.Save()
+                                    break
+                                }
+                                catch {
+                                    Status(format("An error ocurred saving file '{0}': {1}",
+                                        view.editor.FileName, it))
+                                    TinyError |> outhost
+                                }
+                            }
+                            
+        #h save <newFileName> -  Save the buffer as a different file
+        | r/^save (.*)$/   -> {
+                                try {
+                                    view.editor.SaveAs(matches[1])
+                                    status "Buffer saved as '${view.editor.FileName}'."
+                                }
+                                catch {
+                                    Status "An error occurred saving as file '${view.editor.Filename}': $it"
+                                    TinyError |> outhost
+                                }
+                            }
+
+        #h edit <newFileName> - Start editing a new file
+        | r/^edit (.*)$/    -> {
+                                if (view.editor.Dirty) {
+                                    answer = readline("You have unsaved changes, do you want to " +
+                                        "continue to load the file?  (y/N) ")
+                                    if (answer !~ '^ *y') {
+                                        view.Render()
+                                        status 'Edit cancelled'
+                                        continue
+                                    }
+                                }
+
+                                try {
+                                    # remove surrounding spaces and quotes
+                                    view.editor.Load(matches[1].Trim(' "'''))
+                                    view.ShowLine(0)
+                                    Status('File loaded.')
+                                }
+                                catch {
+                                    status(format("An error ocurred loading file '{0}' {1}:",
+                                        view.editor.FileName, it))
+                                }
+                            }
+
+        # Everything else is an error.
+        | -> status(format("Unknown or invalid command: '{0}'", cmd))
+    }
+    catch {
+        status(it)
+    }
+}
+
+##########################################################################
+#
+# Functions implementing high-level editor actions
+#
+
+# Allow the user to enter text to be appended after the current line
+fn AppendText {
+    alert("Appending lines after {0}. Use ';;' to quit", view.editor.Cursor)
+    linesToInsert = []
+    oldCV = console.GetCursorVisible()
+    console.SetCursorVisible(true)
+    try {
+        while ((line = readline "Append: ") != ';;') {
+            linesToInsert += line
+        }
+    
+        if (linesToInsert.count > 0) {
+            position = view.editor.Cursor
+            if (position >= 0) {
+                position += 1
+            }
+            else {
+                position = 0
+            }
+            view.editor.Insert(position, linesToInsert)
+        }
+    }
+    finally {
+        console.SetCursorVisible(true)
+    }
+
+    view.Render()
+    status(format("Insert complete, buffer now contains {0} lines.",
+        view.editor.Buffer.Count))
+}
+
+# Show the editor help (extracted from the editor source code)
+fn ShowHelp {
+    console.Clear()
+
+    println( "Visual Mode Command Keys:")
+    readfile('editor.tiny', '^ *#v') {
+        cmd::desc::_ = it -~ '^ *#v' /~ '-'
+        println('    {0,20} : {1}', cmd, desc.trim())
+    }
+
+    println( "\nCommand Mode Commands:")
+    readfile('editor.tiny', '^ *#h') {
+        cmd::desc::_ = it -~ '^ *#h' /~ '-'
+        println('    {0,20} : {1}', cmd, desc.trim())
+    }
+
+    readline("\n<press enter to resume editing.")
+    view.Render()
+    status()
+}
+
+# Join the current and next lines
+fn JoinLines {
+    if (view.editor.Cursor+1 < view.editor.Length()-1) {
+        currentLine = view.editor.buffer[view.editor.Cursor]
+        lineToJoin  = view.editor.buffer[view.editor.Cursor+1]
+        view.editor.Buffer[view.editor.Cursor] = currentLine + lineToJoin
+        view.editor.Cursor += 1
+        view.editor.Delete(1)
+        view.editor.Cursor -= 1
+        view.Render()
+        status 'Lines joined.'
+    }
+}
+
+# Undo the last operation
+fn Undo {
+   cursor = view.editor.cursor
+   view.editor.Undo()
+   View.Render()
+   status('Undo complete.')
+}
+
+# Paste the contents of the yank buffer after the current line
+fn PasteYankBuffer {
+    match view.editor.Yankbuffer.Count
+    | 0 -> Status('Nothing to paste, yank buffer is empty.')
+    | -> {
+        view.editor.Insert(view.editor.Cursor, view.editor.YankBuffer)
+        view.Render()
+        status(format('{0} lines pasted.', view.editor.YankBuffer.Count))
+    }
+}
+
+# Search for the specified pattern
+fn SearchForARegex pattern {
+    status("Searching for '$pattern' ...")
+    lineno = view.editor.FindPattern(view.editor.Cursor+1, pattern)
+    match lineno
+    | -1 ->  status(format("Pattern '{0}' not found.", pattern))
+    | -> {
+        view.editor.cursor = lineno
+        view.ShowLine(lineno)
+        view.editor.Pattern = pattern
+        status("Pattern '$pattern' found at line $lineno.")
+    }
+}
+
+# Find the next instance of the previously specified pattern.
+fn FindNextMatch {
+    status(format("Searching for '{0}' ...", view.editor.pattern))
+    lineno = view.editor.FindNext(view.editor.Cursor+1)
+    match lineno
+    | -1 -> status(format("Pattern '{0}' not found.", view.editor.pattern))
+    | -> {
+        view.editor.cursor = lineno
+        view.ShowLine(lineno)
+        view.Render()
+        status(format("Pattern '{0}' found at line {1}.",
+            view.editor.pattern, lineno))
+    }
+}
+
+#
+# Edit the current selected line.
+#
+fn EditCurrentLine {
+    status("Editing line ${view.editor.Cursor}")
+    view.editor.PushUndo()
+    y = view.editor.Cursor - view.DisplayStart;
+    result = console.ReadField(7, y, console.GetWindowWidth()-1, 'green', 'black',  view.editor.Buffer[view.editor.Cursor])
+
+    # if the user hit escape, abandon the edit
+    if (result.Key.Key == 'Escape') {
+        status 'Line edit abandoned.'
+        View.Render()
+    }
+    else {
+        view.editor.Buffer[view.editor.Cursor] = result.Text
+        if (result.Key.Key == 'UpArrow') {
+            view.ShowLine(view.editor.Cursor - 1)
+            EditCurrentLine()
+        }
+
+        if (result.Key.Key == 'DownArrow') {
+            view.ShowLine(view.editor.Cursor + 1)
+            EditCurrentLine()
+        }
+            
+        status("Edit complete.")
+    }
+}
+
+#
+# Deletes the line that the cursor is on
+#
+fn DeleteCurrentLine {
+    cursor = view.editor.cursor
+    view.editor.Delete(1)
+    view.Render()
+    status(format("Deleted 1 line, buffer length is now {0}.",
+        view.editor.Length()))
+}
+
+#
+# Copies the current line into the yank buffer then deletes the line
+#
+fn CutCurrentLine {
+    view.editor.Yank(view.editor.Cursor, 1)
+    view.editor.Delete(view.editor.Cursor, 1)
+    view.Render()
+    Status("Cut the current line.")
+}
+
+#
+# Move the cursor to the specified line.
+#
+fn  GoToSpecifiedLine lineno = 0 {
+    match lineno
+    | {lineno < 0}                -> lineno = 0
+    | {lineno >= view.editor.Length()} -> lineno = view.editor.Length() - 1
+    |                             -> lineno -= 1
+
+     view.editor.cursor = lineno
+     view.ShowLine(lineno)
+}
+
+#
+# Display a status message  in the status bar.
+#
+fn Status msg = "" {
+    atLine = if ([view.DisplayStart .. view.DisplayEnd] :> view.editor.Cursor) {
+        view.editor.Cursor
+    } else {
+        view.DisplayEnd
+    }
+
+    statusMsg = format("Tiny Edit [{0} File '{1}' Line {2,3} of {3}]",
+        (if (view.editor.dirty) {'*'} else {' '}),
+        view.editor.FileName,
+        atLine + 1,
+        view.editor.Length())
+
+    if (msg) { statusMsg += " : " + msg }
+
+    y = console.GetWindowHeight()-1
+    try {
+        Console.SetForegroundColor('yellow')
+        Console.SetBackgroundColor('black')
+        Console.SetCursor(0, y-3)
+        Console.Write('-' * (Console.GetWindowWidth()-1))
+        Console.SetCursor(0, y-2)
+        Console.Write(statusMsg.PadRight(Console.GetWindowWidth()-2))
+    }
+    finally {
+        Console.SetForegroundColor('white')
+        Console.SetBackgroundColor('black')
+    }
+}
+
+#
+# Read a "sanitized" key from the user attempting to deal with regular
+# and control keys in a sane way.
+#
+fn teReadKey -> Console.ReadKey(true) ~ {:: keyChar:KeyChar Key:key ::}
+              then {if ([<char>].IsControl(keyChar)) {key} else {keyChar}}
+
+#
+# Prompt for a command at the bottom of the screen.
+#
+fn CmdPrompt str = ':' {
+    y = console.GetWindowHeight()-1
+    console.clearLine(y)
+    oldCV = console.GetCursorVisible()
+    console.SetCursorVisible(true)
+    try {
+        line = console.PromptAt(0, y, str.Length, str)
+    }
+    finally {
+        console.SetCursorVisible(oldCV)
+    }
+    line
+}
+
+##############################################################
+#
+# The View object
+#
+# The implementation of the view object; takes an editor/buffer object
+# and encapsulates it. This object is responsible for providing a view port
+# into the encapsulated  buffer.
+#
+fn NewView editor -> {
+
+    Editor:         editor
+
+    DisplayStart:   0
+
+    DisplayEnd:     console.GetWindowHeight()-4
+
+    Render: {
+        console.Clear()
+        if (this.Editor.Length() == 0) {
+            this.DisplayStart = 0
+            this.DisplayEnd = 0
+            this.Editor.Cursor = 0
+            return
+        }
+
+        line = this.DisplayStart
+        buffer = this.Editor.buffer
+        bufferLen = this.Editor.Length()
+        cursor = this.Editor.cursor
+        lastLine = if (this.DisplayEnd >= bufferLen) { bufferLen-1 }
+                   else { this.DisplayEnd }
+        y = 0
+        while (line <= lastLine) {
+            text = buffer[line]
+            if (line == cursor) {
+                this.ShowCursorLine(y, line, buffer[line])
+                println('')
+            }
+            else {
+                Console.PrintAt(0, y, " {0,03} : {1}", line+1, buffer[line])
+            }
+            line += 1
+            y += 1
+        }
+    }
+
+    ShowLine: {
+        line ->
+
+        if (line >= this.editor.Length()) {
+            return
+        }
+
+        render = true
+        bufferLen = this.Editor.Length()
+        pageSize = math.floor((console.GetWindowHeight()-4) / 2)
+        match line
+        | {[(this.DisplayStart+1) .. (this.DisplayEnd-1)] :> line} -> {
+            if ({[this.DisplayStart .. this.DisplayEnd] :> this.editor.Cursor}) {
+                console.PrintAt(0, this.editor.Cursor-this.DisplayStart,
+                    " {0,03} : {1}", this.editor.Cursor+1, this.editor.buffer[this.editor.Cursor])
+            }
+            this.ShowCursorLine(line-this.DisplayStart, line, this.editor.buffer[line])
+            render = false
+        }
+        | {line <= 0} -> {
+            line = 0
+            this.DisplayStart = 0
+            this.DisplayEnd = math.Min(pageSize * 2, bufferLen)
+        }
+        | {line > bufferLen} -> {
+            this.DisplayEnd = bufferLen - 1
+            this.DisplayStart = bufferLen - pageSize * 2
+            line = bufferLen - 1
+        }
+        | -> {
+            this.DisplayStart = math.max(line - pagesize, 0)
+            if (this.DisplayStart == 0) {
+                this.DisplayEnd = math.Min(pageSize * 2, bufferLen)
+            }
+            else {
+                this.DisplayEnd = line + pageSize-1
+            }
+        }
+
+        this.Editor.Cursor = line
+        if (render) {
+            this.Render()
+        }
+        if (line < 0) {
+            line = 0
+        }
+        status("At line: " + (line+1))
+    }
+
+    PageDown: {
+        pageSize = console.GetWindowHeight()-4
+        this.ShowLine(this.DisplayStart + pageSize)
+    }
+
+    PageUp: {
+        pageSize = console.GetWindowHeight()-4
+        this.ShowLine(this.DisplayEnd - pageSize)
+    }
+
+    HalfPageDown: {
+        pageSize = Math.floor((console.GetWindowHeight()-4) / 2)
+        this.ShowLine(this.DisplayEnd + pageSize)
+    }
+
+    HalfPageUp: {
+        pageSize = Math.floor((console.GetWindowHeight()-4) / 2)
+        this.ShowLine(this.DisplayEnd - pageSize)
+    }
+
+    ShowCursorLine: {
+        y, line, text ->
+
+        try {
+            console.SetForegroundColor('green')
+            Console.PrintAt(0, y, "*{0,03} : {1}", line+1, text)
+        }
+        finally {
+            console.SetForegroundColor('white')
+        }
+    }
+}
+
+##############################################################
+#
+# The data model
+#
+# Constructor for the edit buffer object. An edit buffer holds
+# the text being edited, providing operations for the view and
+# controller to manipulate the buffer. A buffer is usually associated
+# with a file. A new buffer may be created without specifying 
+# a file name in which case it gets the (unsaved) filename 'newfile.txt'
+# which should be saved using "SaveAs".
+#
+fn NewEditBuffer fileName -> {
+
+        # Edit Buffer Properties
+
+        # holds the files text
+        Buffer:         if (fileName && io.FileExists(filename)) {
+                            readfile(FileName)
+                        }
+                        else {
+                            []
+                        }
+
+        # The current line in the file, many operations work off this
+        Cursor:         0
+
+        # The filename associated with this buffer
+        FileName:       fileName ?? 'newfile.txt'
+
+        # The yank buffer for this editor
+        YankBuffer:     []
+
+        # Implements the Undo stack for this buffer
+        UndoStack:      [<Stack[TinyList]>].new()
+
+        # True if the editor contains unsaved changes
+        Dirty:          false
+
+        # The last pattern that was searched for
+        Pattern:        null
+
+        #########################################
+        #
+        # Editor buffer Methods
+
+        #
+        # Load a file into the editor buffer.
+        #
+        Load: {
+           fileName ->
+
+            if (not(filename)) {
+                throw "No filename was specified."
+            }
+
+            if (io.FileExists(filename)) {
+                this.Buffer = readfile(fileName)
+                this.FileName = fileName
+                this.Dirty = false
+            }
+            else {
+                throw "File was not found."
+            }
+        }
+
+        #
+        # Save the buffer to the current associated file.
+        #
+        Save: {
+            this.Buffer |> writefile(this.FileName)
+            this.Dirty = false
+        }
+
+        #
+        # Save the buffer to a different file and set the associated
+        # file to be the filename passed as the argument.
+        #
+        SaveAs: {
+            fileName ->
+
+            this.FileName = filename
+            this.Save()
+        }
+
+        #
+        # Starting from the specified line, find a line matching the
+        # specified regular expression
+        #
+        FindPattern: { startPos, pattern ->
+            this.Pattern = pattern
+            end = this.Length()-1
+            foreach (index in startPos .. end) {
+                if (this.Buffer[index] ~ pattern) {
+                    return index
+                }
+            }
+
+            foreach (index in 0..startPos) {
+                if (this.Buffer[index] ~ pattern) {
+                    return index
+                }
+            }
+
+            return -1
+        }
+
+        #
+        # Find the next line matching the pattern previously specified.
+        #
+        FindNext: { startPos ->
+            pattern = this.Pattern
+            end = this.Length() - 1
+            foreach (index in startPos .. end) {
+                if (this.Buffer[index] ~ pattern) {
+                    return index
+                }
+            }
+
+            foreach (index in 0..startPos) {
+                if (this.Buffer[index] ~ pattern) {
+                    return index
+                }
+            }
+
+            return -1
+        }
+
+        #
+        # Copy the current buffer contents on the undo stack.
+        # The entire buffer is copied, not just the changed parts.
+        #
+        PushUndo: {
+            this.UndoStack.Push(this.Buffer.Copy())
+            this.Dirty = true
+        }
+
+        #
+        # Return the number of lines in the buffer
+        #
+        Length : { this.Buffer.Count }
+
+        #
+        # Undo the last change in the buffer by deleting the
+        # current buffer contents and replacing them with the
+        # buffer popped off the undo stack.
+        #
+        Undo: {
+            if (this.UndoStack.count == 0) {
+                Status("nothing to undo.")
+            }
+            else {
+                this.Buffer = this.UndoStack.Pop()
+            }
+        }
+
+        #
+        # Copy the specified number of lines into the yank buffer
+        #
+        Yank: {
+            from, number ->
+
+            this.yankBuffer = this.Buffer.GetRange(from, number)
+        }
+
+        #
+        # Returns a string describing the state of the editor buffer
+        #
+        Status: {
+            format("\n----------------------------\n"
+                 + "File Name        '{0}'\n"
+                 + "Number Of Lines   {1}\n"
+                 + "Cursor Line:      {2}\n"
+                 + "Yank buffer:      {3}\n"
+                 + "Undo stack depth: {4}\n"
+                 + "Is Buffer dirty:  {5}\n"
+                 + "------------------------------\n",
+                this.FileName, this.Buffer.Count, this.Cursor+1,
+                this.YankBuffer, this.UndoStack.Count, this.dirty);
+        }
+
+        #
+        # Insert the provided lines at the specified location.
+        #
+        Insert: {
+            cursor, lines ->
+
+            if (this.Length() == 0) {
+                cursor = 0
+            }
+            cursor = math.min(cursor, this.Length())
+            this.PushUndo()
+            this.Buffer.InsertRange(cursor, lines)
+            this.Cursor = cursor + lines.Count
+        }
+
+        #
+        # Delete the specified number of lines.
+        #
+        Delete: {
+            lines ->
+
+            this.PushUndo()
+            this.Buffer.RemoveRange(this.Cursor, lines)
+        }
+
+        #
+        # Replace text in the current line
+        #
+        Replace: {
+            line, pat, replaceText ->
+
+            this.PushUndo()
+            this.Buffer[this.cursor] = this.Buffer[this.cursor] -~ [pat, replaceText]
+        }
+
+        #
+        # Replace text in multiple lines
+        #
+        ReplaceMultiple: {
+            lines, pat, replaceText ->
+                this.PushUndo()
+                numLinesChanged = 0
+                foreach (index in lines) {
+                    if (this.Buffer[index] ~ pat) {
+                        numLinesChanged += 1
+                        this.Buffer[index] = this.Buffer[index] -~ [pat, replaceText]
+                    }
+                }
+                return numLinesChanged
+        }
+
+        #
+        # Replace all instances in the buffer.
+        #
+        ReplaceAll: {
+            pat, replaceText ->
+                this.PushUndo()
+                numLinesChanged = 0
+                foreach (index in 0 .. this.Buffer.Count-1) {
+                    if (this.Buffer[index] ~ pat) {
+                        numLinesChanged += 1
+                        this.Buffer[index] = this.Buffer[index] -~ [pat, replaceText]
+                    }
+                }
+                return numLinesChanged
+        }
+    }
+

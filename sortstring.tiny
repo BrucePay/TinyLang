@@ -1,0 +1,55 @@
+################################################################
+#
+# Tiny function for sorting the characters in a string in O(n) time.
+#
+################################################################
+
+#
+# Routine to sort the characters in a string
+#
+fn SortString str {
+    # limiting sort to Ascii (8-bit) chars
+    array =  [<int[]>].new(256)
+
+    # count the occurrances of a character in the string, storing the
+    # result in the array index by the characters codepoint
+    foreach (i in 0..str.length-1) {
+        array[str[i]] += 1
+    }
+
+    # retrieve the codepoints with a non-zero occurance and expand them
+    result = foreach (i in 0 .. array.count-1) {
+        if (array[i] > 0) {
+            ([<string>] [<char>] i) * array[i]
+        }
+    }
+
+    # Join the results into a single string and return it
+    return result |> join
+}
+
+fn SortString2 str -> [<int[]>].new(256)
+                      |> {
+                            arr ->
+                                # count each letter occurance at it's codepoint
+                                str.ToCharArray() |> foreach {arr[it] += 1};
+                                arr
+                      }
+                      |> map {
+                            if (it) {
+                                ([<string>][<char>] it2) * it
+                            }
+                      }
+                      |> join
+
+strToSort = "Hello world! Bonjour monde! How are you doing?"
+
+println('Using iterative function')
+strToSort |> SortString |> println
+
+println('Using pipeline function')
+strToSort |> SortString2 |> println
+
+println('Using buildin sort')
+strToSort.ToCharArray() |> sort |> join |> println
+

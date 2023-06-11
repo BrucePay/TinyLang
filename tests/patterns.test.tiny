@@ -1,0 +1,90 @@
+#
+# Test patterns outside of the 'match' statement; also uses the 'then'
+# operator.
+#
+
+import 'utils'
+import 'tinytestutils'
+import 'math'
+
+suite 'Standalone_Pattern_Tests' {
+
+    #------------------------------------------------
+    test 'AssignInsideLambda' {
+        test: {
+            # Assignment pattern that assigns a variable inside a lambda match
+            (a::{it >= 5 && it <= 10}::c::_ = [5,7,7]) then
+            format("First success a={0} b={1} c={2}", a, _1, c)
+        }
+        expected: 'First success a=5 b=7 c=7'
+    }
+
+    #------------------------------------------------
+    test 'PatternMachWithTilde' {
+        # Pattern matching using the ~ operator
+        test: {
+            [50, 6, 70] ~ a::{it >= 5 && it <= 10}::c::_
+            then format("Second success a={0} b={1} c={2}", a, _1, c)
+        }
+        expected: 'Second success a=50 b=6 c=70'
+    
+    }
+
+    #------------------------------------------------
+    # 'prototype' object for tree
+    prototype = {
+            print : { depth ->
+    
+                # initialize depth to 0 if not set
+                depth ?= 0
+                result = ""
+    
+                # print the left side
+                result += match this.left
+                          | [<IDictionary>] -> this.left.Print(depth+4)
+                          | -> (" " * (depth+2) + this.left)
+    
+                # print the right side
+                result += match this.right
+                          | [<IDictionary>] -> this.right.Print(depth+4)
+                          | -> (" " * (depth+2) + this.right)
+    
+                # Print the operation
+                result + (" " * depth + this.op)
+            }
+        }
+    
+    # Function to turn a list into a tree node
+    fn toNode list ->
+        list ~ op::v1::v2::_ 
+        then {
+            op:op
+            left:v1
+            right:v2
+        }
+        + prototype
+    
+    # build a tree
+    tree =
+        toNode(['+',
+            toNode(['-',
+                6,
+                tonode(['/',
+                    7,
+                    8
+                ])
+            ]),
+            13
+        ])
+
+    # test that depends on all the preample above.
+    test 'PrototypeTreeTest' {
+        test: {
+            # And print it
+            tree.print(1) |> split r/\s/ |> SkipNullOrEmpty
+        }
+        expected: [6, 7,  8, '/', '-', 13, '+']
+    }
+
+}
+

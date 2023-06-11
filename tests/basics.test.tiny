@@ -1,0 +1,1434 @@
+##############################################################
+#
+# Basic tests for the Tiny language
+#
+##############################################################
+
+import 'utils'
+import 'IO'
+import 'math'
+import 'tinytestutils'
+
+#
+# Test the basic tiny statements if, while and foreach
+#
+suite 'StatementTests' {
+
+    Test 'TestIf1' {
+        test: {
+            if (true) { 'true' }
+        }
+        Expected: 'true'
+    }
+
+    Test 'TestIf2' {
+        test: {
+            if (false) { 'true' }
+        }
+        Expected: null
+    }
+
+    Test 'TestIf3' {
+        test: {
+            if (true) { 'true' } else { 'false' }
+        }
+        Expected: 'true'
+    }
+
+    Test 'TestIf4' {
+        test: {
+            if (false) { 'true' } else { 'false' }
+        }
+        Expected: 'false'
+    }
+
+    Test 'TestIf5' {
+        test: {
+            if (1) { 'true' } else { 'false' }
+        }
+        Expected: 'true'
+    }
+
+    Test 'TestIf6' {
+        test: {
+            if (0) { 'true' } else { 'false' }
+        }
+        Expected: 'false'
+    }
+
+    Test 'TestIf7' {
+        test: {
+            if ('abc') { 'true' } else { 'false' }
+        }
+        Expected: 'true'
+    }
+
+    Test 'TestIf8' {
+        test: {
+            if ('') { 'true' } else { 'false' }
+        }
+        Expected: 'false'
+    }
+
+    Test 'TestIf9' {
+        test: {
+            [
+                (if (true)  { 'first' } elseif (true)  { 'second' } else { 'third' }),
+                (if (false) { 'first' } elseif (true)  { 'second' } else { 'third' }),
+                (if (false) { 'first' } elseif (false) { 'second' } else { 'third' })
+            ]
+        }
+        Expected: ['first', 'second', 'third']
+    }
+
+    Test 'TestWhile1' {
+        test: {
+            x = 123
+            while (false) {
+                x = 456
+            }
+            x
+        }
+        Expected: 123
+    }
+
+    Test 'TestWhile2' {
+        test: {
+            x = 10
+            y = 0
+            while (x) {
+                y += 1
+                x -= 1
+            }
+            y
+        }
+        Expected: 10
+    }
+
+    Test 'TestForEach1' {
+        Test: {
+            foreach (i in []) {i}
+        }
+        Expected: null
+    }
+
+    Test 'TestForEach2' {
+        Test: {
+            foreach (i in null) {i}
+        }
+        Expected: null
+    }
+
+    Test 'TestForEach3' {
+        Test: {
+            foreach (i in 'abc') {i}
+        }
+        Expected: ['abc']
+    }
+
+    Test 'TestForEach4' {
+        Test: {
+            foreach (i in [1,2,3] ) {i}
+        }
+        Expected: [1, 2, 3]
+    }
+
+    Test 'TestForEach5' {
+        Test: {
+            foreach (i in [1,2,3] ) {i*i}
+        }
+        Expected: [1, 4, 9]
+    }
+
+    Test 'TestForEach6' {
+        Test: {
+            foreach (i in 1..10 ) {i}
+        }
+        Expected: [1..10]
+    }
+
+    Test 'TestForEach7' {
+        Test: {
+            foreach (i in 1..5 ) {'a'}
+        }
+        Expected: ['a'] * 5
+    }
+
+    # Test using property patterns instead of a simple variable (Windows-specific test)
+    if (IsWindows) {
+        Test 'TestForEachPropertyPattern1' {
+            test: {
+                (foreach ({:: name ws:{it < 5_000_000} ::} in sh 'get-process') {"$name $ws"})
+                |> matchall 'Idle'
+                |> count > 0
+            }
+            Expected: true
+        }
+    }
+    # Same thing but MAC specific.
+    elseif (IsMacOS) {
+        Test 'TestForEachPropertyPattern1' {
+            test: {
+                (foreach ({:: name ws:{it < 1_000_000} ::} in sh 'get-process') {"$name $ws"})
+                |> matchall 'apple'
+                |> count > 0
+            }
+            Expected: true
+        } 
+    }
+
+    data = [ {a:1 b:2}, {a:2 b:2}, {b:2 c:3}, {a:3}, {a:4}, {b:3 c:4} ]
+
+    Test 'TestForEachPropertyPattern2' {
+        test: {
+            foreach ({:: a:{it > 2} ::} in data) { a }
+        }
+        Expected: [3, 4]
+    }
+
+    Test 'TestForEachPropertyPattern2' {
+        test: {
+            foreach ({:: b:2 ::} in data) { b }
+        }
+        Expected: [2, 2 ,2]
+    }
+
+    Test 'TestForEachPropertyPattern3' {
+        test: {
+            foreach ({:: a b:2 ::} in data) { a }
+        }
+        Expected: [1, 2]
+    }
+
+    Test 'TestForEachPropertyPattern4' {
+        test: {
+            foreach ({:: a:r/[0-9]/ ::} in data) { a }
+        }
+        Expected: [1, 2, 3, 4]
+    }
+
+    Test 'TestForEachPropertyPattern5' {
+        test: {
+            foreach ({:: a:{it % 2 == 0} ::} in data) { a }
+        }
+        Expected: [2, 4]
+    }
+
+    Test 'TestForEachPropertyPattern6' {
+        test: {
+            foreach ({:: b c ::} in data) { [b, c] }
+        }
+        Expected: [[2,3], [3, 4]]
+    }
+}
+
+##############################################################
+#
+# Test the 'match' statement.
+#
+
+suite 'MatchStatements' {
+
+warn 'BUGBUG - add tests for clause functions returning patterns and property patterns'
+
+    # Test matching type literals
+    fn testmatch x ->
+        match x
+        | [<int>]         -> "int"
+        | [<string>]      -> "string"
+        | [<IDictionary>] -> "hash"
+        |                 -> "unknown"
+
+    test 'TestMatchInt' {
+        test: {  testmatch(1) }
+        expected: "int"
+    }
+
+    test 'TestMatchString' {
+        test: {  testmatch('abc') }
+        expected: "string"
+    }
+
+    test 'TestMatchHash' {
+        test: {  testmatch({}) }
+        expected: "hash"
+    }
+
+    test 'TestMatchHash' {
+        test: {  testmatch(getdate()) }
+        expected: "unknown"
+    }
+
+    # Test matching with type-constrained variables
+    fn testvarmatch x ->
+        match x
+        | [<int>] i       -> "int $i"
+        | [<double>] d    -> "double $d"
+        | [<string>] s    -> "string $s"
+        |                 -> "unknown"
+
+    test 'TestMatchVarInt' {
+        test: {  testvarmatch(1) }
+        expected: "int 1"
+    }
+
+    test 'TestMatchVarDouble' {
+        test: {  testvarmatch(3.14) }
+        expected: "Double 3.14"
+    }
+
+    test 'TestMatchVarString' {
+        test: {  testvarmatch('abc') }
+        expected: "string abc"
+    }
+
+    test 'TestMatchVarUnknown' {
+        test: {  testvarmatch(r/abc/) }
+        expected: "unknown"
+    }
+
+    # Test matching with functions that return regular expressions
+    fn testmatch2 x ->
+        match x
+        | regex('^a')         -> "Eh"
+        | regex('^b')         -> { "Bee" }
+        | [<regex>].new('^c') -> "See"
+        |                     -> "default"
+
+     test 'TestMatchRegex1a'{
+        test: { testmatch2('abc') }
+        Expected: 'Eh'
+     }
+
+    test 'TestMatchRegex1b' {
+        test: { testmatch2('bca') }
+        Expected: 'Bee'
+    }
+
+    test 'TestMatchRegex1c' {
+        test: { testmatch2('cab') }
+        Expected: 'See'
+    }
+
+    # Test with regular expression literals
+    fn testmatch3 x ->
+         match x
+         | r/^a/:foo -> { foo[0] }  # Use the match variable to confirm the result
+         | r/^b/ -> {"Bee" }
+         | r/^c/ -> "See"
+         |       -> "default"
+
+     test 'TestMatchRegex2a'{
+        test: { testmatch3('abc') }
+        Expected: 'a'
+     }
+
+    test 'TestMatchRegex2b' {
+        test: { testmatch3('bca') }
+        Expected: 'Bee'
+    }
+
+    test 'TestMatchRegex2c' {
+        test: { testmatch3('cab') }
+        Expected: 'See'
+    }
+
+    test 'MatchInALoop' {
+        test: {
+            range(1,10).map{
+            match it
+                | {it % 2 == 0} -> ("two " + it)
+                | {it % 3 == 0} -> ("three " + it)
+                | -> "neither " + it
+            }
+        }
+        Expected: [
+            'neither 1', 'two 2', 'three 3', 'two 4', 'neither 5',
+            'two 6', 'neither 7', 'two 8', 'three 9', 'two 10'
+        ]
+    }
+}
+
+##############################################################
+#
+# Test Tiny's function capabilities.
+#
+
+# Function set that reverses a list.
+undef rev
+def rev x::xs -> rev(xs) + x
+def rev null -> []
+
+# Function set to compute the Fibonocci sequence
+def dfib 0 -> 1
+def dfib 1 -> 1
+def dfib n -> dfib(n-1) + dfib(n-2)
+
+
+Suite 'FunctionTests' {
+
+    Test 'TestFact1' {
+        Test: {
+            fn fact n -> range(1,n).reduce{x, y -> x * y}
+            range(2, 12, 3).map{n -> [n, fact(n)]}
+        }
+        Expected:  [ [2, 2], [5, 120], [8, 40320], [11, 39916800] ]
+    }
+
+    Test 'TestFact2' {
+        Test: {
+            fn fact n -> (1 .. n).Reduce{it * it2};
+            (2 .. 12 .. 3).map{[it, fact(it)]};
+        }
+        Expected:  [ [2, 2], [5, 120], [8, 40320], [11, 39916800] ]
+    }
+
+    Test 'TestFib1' {
+        Test: {
+            fn fib n -> match n
+                        | 1 -> 1
+                        | 2 -> 1
+                        | -> fib(n-1) + fib(n-2)
+
+             range(2,10).map{n -> fib(n)}
+        }
+        Expected: [1, 2, 3, 5, 8, 13, 21, 34, 55]
+    }
+
+    Test 'TestFib2' {
+        Test: {
+             (1 .. 10).map{dfib(it)}
+        }
+        Expected: [1, 2, 3, 5, 8, 13, 21, 34, 55, 89]
+    }
+
+    Test 'TestPrimes1' {
+        test: {
+            # mark all of the multiples of this number
+            fn mark num, arr, max ->
+                [num*2 .. max .. num]
+                .foreach{n -> arr[n] = false}
+
+            # for all primes, mark the multiples of that prime
+            fn markall arr, max ->
+                [2 .. max].foreach{ mindex ->
+                        if (mindex * 2 < max && arr[mindex]) {
+                            mark(mindex, arr, max)
+                        }
+                    }
+
+            # Function to get the unmarked primes from the list
+            fn getPrimes max {
+                primes = [0 .. max].map{true};
+                markall(primes, max);
+                [2 .. max].where{n -> primes[n]};
+            }
+
+            getPrimes(100);
+
+        }
+        Expected: [
+                     2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31,
+                     37, 41, 43, 47, 53, 59, 61, 67, 71, 73,
+                     79, 83, 89, 97
+                  ]
+    }
+
+    Test 'TestReverse1' {
+        test: {
+            fn rev list ->
+                if (list) {
+                    x::list = list;
+                    rev(list) + x;
+                }
+                else {
+                    [];
+                }
+            list = [1 .. 10]
+            rev(list) == list.reverse()
+        }
+        Expected: true
+    }
+
+    Test 'TestReverse2' {
+        # same as previous test but with pattern matching.
+        test: {
+            fn prev list ->
+                match list
+                | x::xs -> prev(xs) + x
+                | -> []
+
+            list = [1 .. 10]
+            prev(list) == list.reverse()
+        }
+        Expected: true
+    }
+
+    test 'TestReverse3' {
+        test: {
+            list = getrandom(10)
+            rev(list) == list.Reverse()
+        }
+        Expected: true
+    }
+
+    test 'TestReverse4' {
+        test : {
+            rev(null)
+        }
+        Expected: []
+    }
+
+    test 'TestReverse5' {
+        test : {
+            rev([1])
+        }
+        Expected: [1]
+    }
+
+    Test 'SentenceMatching' {
+        test: {
+            text =
+                "Historically, the world of data and the world of objects " +
+                "have not been well integrated. Programmers work in C# or Visual Basic " +
+                "and also in SQL or XQuery. On the one side are concepts such as classes, " +
+                "objects, fields, inheritance, and dotNET Framework APIs. On the other side " +
+                "are tables, columns, rows, nodes, and separate languages for dealing with " +
+                "them. Data types often require translation between the two worlds; there are " +
+                "different standard functions. Because the object world has no notion of query, a " +
+                "query can only be represented as a string without compile-time type checking or " +
+                "IntelliSense support in the IDE. Transferring data from SQL tables or XML trees to " +
+                "objects in memory is often tedious and error-prone.";
+
+            # Could be a literal but we want to test the newhash() function.
+            wordsToMatch = newhash("Historically", false, "data", false, "integrated", false);
+
+            # Reset the entries in the table to false
+            fn inithash -> foreach (k in keys(wordsToMatch)) { wordsToMatch[k] = false; }
+
+            fn allTrue -> values(wordstomatch).reduce{x, y -> x && y }
+
+            fn setIfContained word -> if (wordsToMatch :> word) { wordsToMatch[word] = true }
+
+            # Remove commas then split the text into sentences
+            sentences = text -~ ',' /~ '[.?!]+'
+
+            # now do the matching...
+            matched = false
+            sentences.
+                foreach{sentence ->
+                    initHash();
+                    split(sentence, " +").
+                        foreach{word -> setIfContained(word)};
+                    if (allTrue()) {
+                        matched = true
+                    };
+                };
+
+            matched
+        }
+        Expected: true
+    }
+
+    # Tests basic imperative constructs...
+    test 'TestGcd' {
+        test: {
+            #####################
+            #
+            # Euclid's gcd function
+            #
+            fn gcd (a, b) {
+                while (a != b) {
+                    if (a > b) {
+                        a = a - b
+                    }
+                    else {
+                        b = b - a
+                    }
+                }
+                a
+            }
+
+            gcd(165, 75)
+        }
+        Expected: 15
+    }
+
+    # and basic recursive operation.
+    test 'RecursiveGCD' {
+        test: {
+            # Recursive implementation of the GCD algorithm
+            fn recgcd u v -> if (v) { recgcd(v, u % v) }
+                             else   { math.abs(u) }
+
+            recgcd(847, 378)
+        }
+        Expected: 7
+    }
+
+    # Various tests of recursion...
+
+    test 'MyMap' {
+        test: {
+            fn myMap list f ->
+                match list
+                | x :: xs -> f(x) :+ myMap(xs, f)
+                | [] -> [];
+
+            [1, 2, 3, 4, 5] |> myMap {n -> n * n}
+        }
+        Expected: [1, 4, 9, 16, 25]
+    }
+
+    test 'TestPipeOperator' {
+        test: {
+            [1..100]
+            |> MatchAll('^2')   # get all the numbers that start with '2'
+            |> sum              # sum the numbers
+            |> math.Sqrt        # get the sqrt of the sum
+            |> math.Floor       # convert it into an int.
+        }
+        Expected: 15
+    }
+
+# BUGBUGBUG - standalone this works but fails in the test suite with an infinite recurse - need to find out why
+if (false) {
+    test 'TestQSortFunction' {
+        test: {
+            # Recursive quicksort using patterns
+            def qsort1 [] -> []
+            def qsort1 p::xs -> qsort1(xs |> where {it < p})
+                               + p
+                               + qsort1(xs |> where {it >= p})
+
+            # Now try it out
+            qsort1([3, 9, 10, 1, 5, 4, 2, 6, 7, 8])
+        }
+        Expected: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    }
+}
+
+    test 'TestQSortFunction2' {
+        test: {
+
+            # Another variation on the recursive quicksort. Uses the split method
+            # to do the partitioning in a single pass.
+            fn qsort2 list ->
+                match list
+                | [] -> []
+                | pivot :: xs  ->
+                    match xs.split{ it < pivot }
+                    | smaller :: larger :: _ ->
+                        qsort2(smaller) + pivot + qsort2(larger);
+
+            qsort2([3,9,10,1,5,4,2,6,7,8])
+        }
+        Expected: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    }
+    
+
+    fn sumlist list sumSoFar ->
+        match list
+        | x :: xs  -> sumlist(xs , sumSoFar+x)
+        | -> sumSoFar;
+
+    test 'TestSumListFunction1' {
+        test: { [] |> sumlist(0) }
+        expected: 0
+    }
+
+    test 'TestSumListFunction2' {
+        test: { null |> sumlist(0) }
+        expected: 0
+    }
+
+    test 'TestSumListFunction3' {
+        test: { [1..10] |> sumlist(0) }
+        expected: 55
+    }
+
+    data = getrandom(30)
+
+    test 'TestSumListFunction4' {
+        test: { sumlist(data, 0) }
+        expected: data.Sum()
+    }
+
+    test 'TestSumListFunction5' {
+        test: { sumlist([], 0) }
+        expected: 0
+    }
+
+    test 'TestSumListFunction6' {
+        test: { sumlist(null, 0) }
+        expected: 0
+    }
+
+    test 'TestSumListFunction7' {
+        test: { sumlist([1..10], 0) }
+        expected: 55
+    }
+}
+
+##############################################################
+#
+# Test function set to check to see if a list is a palindrome 
+#
+
+undef palin
+def palin [] -> true
+def palin list -> count(list) % 2 == 0 && list.first() == list.last() && palin(list.slice(1,-2))
+
+suite 'Function-Palindrome' {
+
+    test 'Empty list' {
+        test: { [] |> palin }
+        Expected: true
+    }
+
+    test 'Odd length list' {
+        test: { [1,2,3] |> palin }
+        Expected: false
+    }
+
+    test 'Even length but not palindrome' {
+        test: { [1,2,3,4] |> palin }
+        Expected: false
+    }
+
+    test 'Valid palindrome1' {
+        test: { [1, 2, 2, 1] |> palin }
+        Expected: true
+    }
+
+    test 'Valid palindrome2' {
+        test: { [1, 2, 3, 3, 2, 1] |> palin }
+        Expected: true
+    }
+
+    test 'Valid palindrome3' {
+        test: {
+            # generate the palindrome to test
+            data = getrandom(10)
+            data = data + data.Reverse()
+            data |> palin
+        }
+        Expected: true
+    }
+}
+
+##############################################################
+#
+# Test function set to sum pairs of objects in a list
+
+undef sumpairs
+def sumpairs x::y::[] -> [x+y]
+def sumpairs x::y::xs -> [x+y] + sumpairs(xs)
+
+suite 'FunctionSumPairs' {
+
+    test 'SumPairs1' {
+        test: { sumpairs(null) == null }
+        expected: true
+    }
+
+    test 'SumPairs2' {
+        test: {  sumpairs([]) == null }
+        Expected: true
+    }
+
+    test 'SumPairs3' {
+        test: { sumpairs([1]) }
+        expected: [1]
+    }
+
+    test 'SumPairs4' {
+        test: { sumpairs([1,2]) }
+        expected: [3]
+    }
+
+    test 'SumPairs5' {
+        test: { sumpairs([1,2,3]) }
+        expected: [3, 3]
+    }
+
+    test 'SumPairs6' {
+        test: { sumpairs([1,2,3,4]) }
+        expected: [3, 7]
+    }
+
+    test 'SumPairs7' {
+        test: { sumpairs([1,2,3,4,5]) }
+        expected: [3, 7, 5]
+    }
+
+    test 'SumPairs8' {
+        test: { sumpairs([1,2,3,4,5,6]) }
+        expected: [3, 7, 11]
+    }
+
+    test 'SumPairs9' {
+        test: { sumpairs('abc'.ToCharArray()) == ["ab", "c"] }
+        expected: true
+    }
+
+    test 'SumPairs10' {
+        test: { sumpairs([null, null]) }
+        expected: [null]
+    }
+
+    test 'SumPairs11' {
+        test: { sumpairs([null, null, null, null]) }
+        expected: [null, null]
+    }
+
+    test 'SumPairs12' {
+        test: { sumpairs(['a', 'b', 'c', 'd', 'e']) }
+        expected: ['ab', 'cd', 'e']
+    }
+}
+
+##############################################################
+#
+# Return the smallest item in a list based on the
+# result of executing a lambda.
+#
+
+undef minlist
+def minlist x::[] f -> x
+def minlist x::xs f {
+    a = minlist(xs, f)
+    if (f(x) < f(a)) { x } else { a }
+}
+def minList list -> minlist(list, {it})
+
+suite 'FunctionSet_Minlist' {
+    test 'MinNumbers' {
+        test:     { minlist([3,2,1,4,5]) }
+        Expected: 1
+    }
+
+    # Sort with lambda that returns negative value so largest becomes smallest
+    test 'FunctionSet_MinlistWithLambda' {
+        test:     { minlist([3,2,1,4,5], { -it }) }
+        Expected: 5
+    }
+
+    # Find the shortest array by passing a lambda that returns the count of the array
+    test 'FunctionSet_MinlistWithArray' {
+        Test:     { minlist( [ [1,2,3], [1,2], [1,2,3,4]], {it.count}) }
+        Expected: [1, 2]
+    }
+}
+
+##############################################################
+
+def arityTest x     -> 'one'
+def arityTest x y   -> 'two'
+def arityTest x y z -> 'three'
+
+suite 'FunctionArityTests' {
+
+    test 'ArityTest1' {
+        test: { arityTest(1) }
+        Expected: 'one'
+    }
+
+    test 'ArityTest2' {
+        test: { arityTest(1, 2) }
+        Expected: 'two'
+    }
+
+    test 'ArityTest3' {
+        test: { arityTest(1, 2, 3) }
+        Expected: 'three'
+    }
+}
+
+##############################################################
+#
+# Test variance on both type and arity
+#
+def arityType [<int>] x                     -> 'int one'
+def arityType [<int>] x [<int>] y           -> 'int two'
+def arityType [<int>] x [<int>] y [<int>] z -> 'int three'
+def arityType [<sring>] x                   -> 'str one'
+def arityType [<sring>] x [<sring>] y       -> 'str two'
+def arityType [<sring>] x [<sring>] y [<sring>] z -> 'str three'
+def arityType _ -> 'undefined 1'
+
+suite 'FunctionArityTypeTests' {
+
+    test 'ArityTypeTest1' {
+        test: { arityType(1) }
+        Expected: 'int one'
+    }
+
+    test 'ArityTypeTest2' {
+        test: { arityType('abc') }
+        Expected: 'str one'
+    }
+
+    test 'ArityTypeTest3' {
+        test: { arityType(1, 2) }
+        Expected: 'int two'
+    }
+
+    test 'ArityTypeTest4' {
+        test: { arityType('abc', 'dev') }
+        Expected: 'str two'
+    }
+
+    test 'ArityTypeTest5' {
+        test: { arityType(1, 2, 3) }
+        Expected: 'int three'
+    }
+
+    test 'ArityTypeTest6' {
+        test: { arityType('abc', 'def', 'ghi') }
+        Expected: 'str three'
+    }
+}
+
+##############################################################
+#
+# Function set for destructuring a list into pairs
+#
+def pairs []        -> [];
+def pairs x::[]     -> [[x, 0]];
+def pairs x::y::xs  -> [x, y] :+ pairs(xs);
+
+#
+# Test the pairs function
+#
+suite 'FunctionSetPairs' {
+
+    test 'pairs1' {
+        test: { pairs([]) }
+        expected: []
+    }
+
+    test 'pairs1a' {
+        test: { pairs(null) }
+        expected: null
+    }
+
+    test 'pairs2' {
+        test: { pairs([1]) }
+        expected: [[1, 0]]
+    }
+
+    test 'pairs3' {
+        test: { pairs([1,2]) }
+        expected: [[1, 2]]
+    }
+
+    test 'pairs4' {
+        test: { pairs([1,2,3]) }
+        expected: [[1, 2], [3, 0]]
+    }
+
+    test 'pairs5' {
+        test: { pairs([1,2,3,4]) }
+        expected: [[1, 2], [3, 4]]
+    }
+
+    test 'pairs6' {
+        test: { pairs([1,2,3,4,5]) }
+        expected: [[1, 2], [3, 4], [5, 0]]
+    }
+
+    test 'pairs7' {
+        test: { pairs([1,2,3,4,5,6]) }
+        expected: [[1, 2], [3, 4], [5, 6]]
+    }
+
+    test 'pairs8' {
+        test: { pairs([1,2,3,4,5,6,7]) }
+        expected: [[1, 2], [3, 4], [5, 6], [7, 0]]
+    }
+};
+
+##############################################################
+#
+#
+
+def fpairs [] f -> []
+def fpairs x::[] f -> f(x, 0)
+def fpairs x::y::xs f -> f(x, y) :+ fpairs(xs, f)
+
+suite 'FunctionSetPairsWithFunction' {
+
+    test 'EvenNumberOfItems' {
+        test: {
+            fpairs([1..8], {x, y -> x+y})
+        }
+        expected: [3, 7, 11, 15]
+    }
+
+    test 'OddNumberOfItems' {
+        test: {
+            fpairs([1..9], {x, y -> x+y})
+        }
+        expected: [3, 7, 11, 15, 9]
+    }
+
+   test 'EvenNumberOfItemsMultiply' {
+        test: {
+            fpairs([1..8], {x, y -> x*y})
+        }
+        expected: [2, 12, 30, 56]
+    }
+
+    test 'OddNumberOfItemsMultiply' {
+        test: {
+            fpairs([1..9], {x, y -> x*y})
+        }
+        expected: [2, 12, 30, 56, 0]
+    }
+}
+
+##############################################################
+#
+# Tail-recursive factorial with a function set
+
+def fact n -> fact(1, n)
+def fact acc 1 -> acc
+def fact acc n -> fact(acc * n, n-1)
+
+suite 'FunctionTailFact' {
+
+    test 'Fact1' {
+        Test: {
+            fact(1)
+        }
+        Expected: 1
+    }
+
+    test 'Fact2' {
+        Test: {
+            fact(2)
+        }
+        Expected: 2
+    }
+
+    test 'Fact3' {
+        Test: {
+            fact(3)
+        }
+        Expected: 6
+    }
+
+    test 'Fact4' {
+        Test: {
+            fact(4)
+        }
+        Expected: 24
+    }
+
+    test 'Fact5' {
+        Test: {
+            fact(5)
+        }
+        Expected: 120
+    }
+
+    test 'Fact6' {
+        Test: {
+            fact(6)
+        }
+        Expected: 720
+    }
+
+    test 'Fact7' {
+        Test: {
+            fact(7)
+        }
+        Expected: 5040
+    }
+
+    test 'Fact8' {
+        Test: {
+            fact(8)
+        }
+        Expected: 40320
+    }
+
+    test 'Fact9' {
+        Test: {
+            fact(9)
+        }
+        Expected: 362880
+    }
+
+    test 'Fact10' {
+        Test: {
+            fact(10)
+        }
+        Expected: 3628800
+    }
+}
+
+##############################################################
+#
+# Factorial using the .Product() method
+
+def fact n -> [1..n].Product()
+
+suite 'FunctionProductFact' {
+
+    test 'Fact1' {
+        Test: {
+            fact(1)
+        }
+        Expected: 1
+    }
+
+    test 'Fact2' {
+        Test: {
+            fact(2)
+        }
+        Expected: 2
+    }
+
+    test 'Fact3' {
+        Test: {
+            fact(3)
+        }
+        Expected: 6
+    }
+
+    test 'Fact4' {
+        Test: {
+            fact(4)
+        }
+        Expected: 24
+    }
+
+    test 'Fact5' {
+        Test: {
+            fact(5)
+        }
+        Expected: 120
+    }
+
+    test 'Fact6' {
+        Test: {
+            fact(6)
+        }
+        Expected: 720
+    }
+
+    test 'Fact7' {
+        Test: {
+            fact(7)
+        }
+        Expected: 5040
+    }
+
+    test 'Fact8' {
+        Test: {
+            fact(8)
+        }
+        Expected: 40320
+    }
+
+    test 'Fact9' {
+        Test: {
+            fact(9)
+        }
+        Expected: 362880
+    }
+
+    test 'Fact10' {
+        Test: {
+            fact(10)
+        }
+        Expected: 3628800
+    }
+}
+
+##############################################################
+#
+# Test using dictionaries as objects
+#
+
+suite 'TestObjectFeatures' {
+
+    # create an "object"
+    h = {
+        # value member
+        val  : 0;
+
+        # method with no args
+        incr : {this.val += 11};
+
+        # method with one arg
+        Add  : {n -> this.val += n}
+    };
+
+    test 'SetProperty1' {
+        test: {
+            h.val = 1
+            h.val
+        }
+        expected: 1
+    }
+
+    test 'MethodCall1' {
+        test: {
+            h.Incr();
+            h.val
+        }
+        expected: 12
+    }
+
+    test 'MethodCall2' {
+        test: {
+            h.add(10);
+            h.val
+        }
+        Expected: 22
+    }
+
+    test 'SetProperty1' {
+        test: {
+            h.val = 3.14
+            h.val
+        }
+        expected: 3.14
+    }
+
+    test 'MethodCall3' {
+        test: {
+            h.add(3+4);
+            h.val
+        }
+        Expected: 10.14
+    }
+}
+
+##############################################################
+#
+# Test the assignment operators
+#
+
+suite 'AssignmentOperators' {
+
+    test 'PlusEquals' {
+        test: {
+            a = 5;
+            a += 1;
+            a
+        }
+        Expected: 6
+    }
+
+    test 'PlusEqualsString' {
+        test: {
+            a = 'hi'
+            b = a
+            b += ' there'
+            a + b 
+        }
+        Expected: 'hihi there'
+    }
+
+    test 'PlusEqualsArray' {
+        test: {
+            a = [1,2,3,4]
+            b = a
+            b += 5
+            # += mutates the original so both should be the same
+            a == b
+        }
+        Expected: true
+    }
+
+    test 'MinusEquals' {
+        test: {
+            a = 6;
+            a -= 2;
+            a
+        }
+        Expected: 4
+    }
+
+    test 'TimesEquals' {
+        Test: {
+            a = 8;
+            a *= 3;
+            a
+        }
+        Expected: 24
+    }
+
+    test 'DivideEquals' {
+        test: {
+            a = 64;
+            a /= 8;
+            a
+        }
+        Expected: 8
+    }
+
+    test 'QuestionEquals1' {
+        test: {
+            x = null
+            x ?= 13
+            x
+        }
+        expected: 13
+    }
+
+    test 'QuestionEquals2' {
+        test: {
+            x = 77
+            x ?= 13
+            x
+        }
+        expected: 77
+    }
+}
+
+##############################################################
+#
+# function set differentiated by the type constraint on its parameter
+#
+
+undef foo
+def foo [<int>] x           -> "X is an int"
+def foo [<string>] x        -> "X is a string"
+def foo [<IDictionary>] x   -> "X is a dictionary"
+
+suite 'TypeConstrainedFunctions' {
+
+    test 'TypeConstraint1' {
+        test: {
+            foo(123)
+        }
+        Expected: "X is an int"
+    }
+
+    test 'TypeConstraint2' {
+        test: {
+            foo "hi"
+        }
+        Expected: "X is a string"
+    }
+
+    test 'TypeConstraint3' {
+        test: {
+            foo {a:1 b:2 c:3}
+        }
+        Expected: "X is a dictionary"
+    }
+
+    # If there is no matching function, return null (this should probably really be an error
+    test 'TypeConstraint4' {
+        test: {
+            foo(getdate()) == null
+        }
+        Expected: true
+    }
+
+    test 'TypeConstraint5' {
+        test: {
+            foo(null) == null
+        }
+        Expected: true
+    }
+}
+
+##############################################################
+#
+# Special invocation with functions
+#
+
+suite 'SpecialInvocation' {
+
+    fn doit main {
+
+        mainVal = if (main is [<TinyLambda>]) {
+                    main.Invoke()
+                  }
+                  else {
+                     main
+                  };
+
+        bodyval = if (body is [<TinyLambda>]) {
+                    body.Invoke()
+                  }
+                  else {
+                    body
+                  };
+
+
+        return [ mainVal, bodyval ]
+    }
+
+    test 'Testing special invocation with a string and a lambda' {
+        test: {
+            doit 'Foo' {
+                [1, 2, 3, 4, 5]
+            }
+        }
+        Expected: ['foo', [1..5]]
+    }
+
+    test 'Testing special invocation with a string and an object literal' {
+        test: {
+            result = doit('AnotherName') {
+                one:   1
+                two:   2
+                three: 3
+            }
+            result[0] == 'AnotherName' && result[1] ~ {one:1 two:2 three:3}
+        }
+        expected: true
+    }
+
+   test 'Testing special invocation with two lambdas' {
+        test: {
+            doit {2+3} {14/2};
+        }
+        Expected: [5, 7]
+    }
+
+#BUGBUGBUG - func <lambda> <dictionary> doesn't work.
+#    test 'Testing special invocation with a lambda and an object literal' {
+#        test: {
+#            result = doit {'ab' + 'cd'} {
+#                one:   1
+#                two:   2
+#                three: 3
+#            };
+#            result[0] == 'abcd' && result[1] ~ {one:1 two:2 three:3}
+#        }
+#        expected: true
+#    }
+
+   test 'Testing special invocation with a hashtable and a lambda' {
+        test: {
+            result = doit {a:1 b:2 c:3} {
+                14/2
+            };
+            result[0] ~ {a:1 b:2 c:3} && result[1] == 7
+        }
+        Expected: true
+    }
+
+#BUGBUGBUG - func <dict> <dict> doesn't parse properly.
+#    test 'Testing special invocation with two object literals' {
+#        test: {
+#            result = doit {a:1 b:2 c:3} {
+#                one:   1
+#                two:   2
+#                three: 3
+#            }
+#            result[0] ~ {a:1 b:2 c:3} && result[1] ~ {one:1 two:2 three:3}
+#        }
+#        expected: true
+#    }
+}
+

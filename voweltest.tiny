@@ -1,0 +1,16 @@
+#########################################################################
+#
+# A simple example that uses alternating patterns to decide if a
+# letter is a vowel or not.
+#
+#########################################################################
+
+why = 'y'
+fn vowelTest c ->
+        match c
+        | 'a' | 'e' | 'i' | 'o' | 'u' -> alert   "$c is a vowel.";
+        | ^why <# pinned var for y #> -> warn    "$c is a vowel sometimes";
+        | _                           -> println "$c is not a vowel.";
+
+['a'..'z'] |> foreach{vowelTest(it)}
+

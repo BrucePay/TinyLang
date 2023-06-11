@@ -1,0 +1,307 @@
+#############################################################################
+#
+# A Tiny script that implements a variation on the arcade game 'Snake'.
+#
+#############################################################################
+
+import utils
+import console
+
+#
+# Process options for the game
+#
+__snake_options = Utils.GetOpts('snake', args, {
+        numPellets:  15  # number of pellets to eat.
+        delay:       150 # iteration interval in milliseconds.
+        time:        150 # game duration in seconds
+    })
+
+# Option error. GetOpts will have alerted the user so just exit.
+if (__snake_options == null) {
+    return null
+}
+
+#############################################################################
+#
+# Object modelling the snake
+#
+snake = {
+    #
+    # List of segments that make up the snake's body
+    #
+    SegmentList : [
+                    [13, 25], [14, 25], [15, 25],
+                    [16, 25], [17, 25], [18, 25],
+                    [19, 25], [20, 25], [21, 25]
+                  ];
+
+    #
+    # The direction the snake is currently moving in
+    #
+    Direction :   "e";
+
+    #
+    # Method to draw the snake on the screen.
+    #
+    Render : {
+        char = '='
+        segCount = this.SegmentList.Count
+        foreach (el in this.SegmentList) {
+            segcount -= 1
+            if (segCount == 0) {
+                char = '@'
+            }
+            console.printat(el[0], el[1], char)
+        }
+    };
+
+    #
+    # Move the snake one cell forwards in the current direction.
+    #
+    Move : {
+
+        # See if the snake ate a pellet.
+        atePellet = pellets.CheckForPellet(this.SegmentList[-1])
+
+        # If we didn't get a pellet, remove the last segment
+        if ( ! atePellet) {
+            last = this.SegmentList[0]
+            console.printat(last[0], last[1], " ")
+            this.SegmentList = tail(this.SegmentList)
+        }
+
+        # Duplicate the head of the snake so we can update it.
+        hd = this.SegmentList[-1].Copy()
+        match this.direction
+        | 'n' -> {
+            if (hd[1]+1 >= console.GetWindowHeight()+1) {
+                this.Direction = 'e'
+            }
+            else {
+                hd[1] += 1
+            }
+            this.SegmentList.Add(hd)
+        }
+        | 's' -> {
+            if (hd[1]-1 <= 0) {
+                this.direction = 'w'
+            }
+            else {
+                hd[1] -= 1
+            }
+            this.SegmentList.Add(hd)
+        }
+        | 'e' -> {
+            if (hd[0]+1 >= console.GetWindowWidth()) {
+                this.direction = 's'
+            }
+            else {
+                hd[0] += 1
+            }
+            this.SegmentList.Add(hd)
+        }
+        | 'w' -> {
+            if (hd[0]-1 <= 0) {
+                this.direction = 'n'
+            }
+            else {
+                hd[0] -= 1
+            }
+            this.SegmentList.Add(hd)
+        }
+
+        this.render()
+    }
+}
+
+#############################################################################
+#
+# Object modelling the pellets on the playing field.
+#
+
+pellets = {
+
+    Score:          0   # multiple of the number of pellets consumed
+
+    Pellets:        []  # List of the pellet locations
+
+    StatusColor:    'cyan'
+
+    # Method to show the game status.
+    ShowStatus: {
+        oldFg = console.GetForeGroundColor();
+        secondsRemaining = (endTime - GetDate()).totalseconds as [<int>];
+        try {
+            this.StatusColor =
+                if (secondsRemaining <= 30) {
+                    # If time is running out, blink the status bar red and yellow.
+                    if (this.Statuscolor == 'yellow') { 'red' } else { 'yellow' }
+                }
+                else {
+                    'cyan'
+                }
+
+            console.SetForegroundColor(this.Statuscolor)
+            console.PrintAt(0, console.GetWindowHeight(),
+                "Score: {0,3} Pellets remaining {1,2} Time remaining: {2} seconds      ",
+                    this.Score, this.Pellets.Count, secondsRemaining)
+        }
+        finally {
+            console.SetForegroundColor(oldFg)
+        }
+    }
+
+    #
+    # Initialize the pellet field
+    #
+    Initialize: {
+        # Generate the pellet locations by taking two random lists and zipping them together.
+        snake_len = Snake.SegmentList.Count
+        this.pellets =
+            getrandom(__snake_options.numPellets + snake_len, 1, console.GetWindowWidth()-1)
+            |> zip( getrandom(__snake_options.NumPellets + snake_len, 1, console.GetWindowHeight()-3))
+            # make sure none of them land on the snake
+            |> where {Snake.SegmentList !:> it}
+            |> first(__snake_options.numPellets)
+
+        # Then draw the pellets on the screen.
+        oldFg = console.GetForeGroundColor();
+        console.SetForegroundColor('green')
+        this.pellets.foreach{ console.printat(it[0], it[1], 'O') }
+        console.SetForegroundColor(oldFg)
+        this.ShowStatus()
+    }
+
+    ColorList:      ['yellow', 'green', 'cyan', 'magenta', 'red']
+    ColorIndex:     0
+
+    NextColor: {
+            this.colorIndex = (this.colorIndex + 1) % this.ColorList.Count
+            this.ColorList[this.ColorIndex]
+    }
+
+    #
+    # Method that handles the case where the snake eats a pellet.
+    #
+    CheckForPellet: {
+        location ->
+            # See if the pellet list contains this location
+            if (this.Pellets :> location) {
+                # If so, show the eating animation
+                oldFg = console.GetForeGroundColor();
+                (1..4).foreach {
+                    console.SetForegroundColor('red')
+                    console.PrintAt(location[0], location[1], 'X');
+                    sleep(75)
+                    #console.SetForegroundColor('yellow')
+                    console.PrintAt(location[0], location[1], '+');
+                    sleep(75)
+                }
+                console.SetForegroundColor(oldFg)
+    
+                # Increment the score
+                this.score += 10
+    
+                # And remove the pellet from the list.
+                this.Pellets = this.Pellets.Where{it != location}
+                this.showStatus()
+                # Change the snakes color
+                console.SetForegroundColor(this.NextColor())
+                return true
+            }
+            else {
+                this.showStatus()
+                return false
+            }
+    }
+}
+
+#############################################################################
+#
+# The main game loop.
+#
+
+oldFg = console.GetForeGroundColor();
+try {
+    cls()
+    console.SetCursorVisible(false)
+    key = console.Announce(
+        "Welcome to the Snake game. Your job is to guide the snake " +
+        "over the playing field so it can eat all of the food pellets. " +
+        "If you get all of the pellets before the time runs out, you " +
+        "win! In this game, you have to eat ${__snake_options.numPellets} pellets " +
+        "in ${__snake_options.time} seconds. Use the arrow keys to control the " +
+        "snake's direction, the space bar will cause the snake to have a burst of speed. " +
+        "You can quit at any time by pressing 'q'. Get ready to play!",
+        "green"
+    ).Key
+    if (key == 'q') {
+        cls()
+        println("Thanks for playing! Bye bye!")
+        return
+    };
+ 
+    cls()
+    fastCount = 0   # The number of iterations to move the snake quickly.
+    console.SetForegroundColor('yellow')
+    endTime = GetDate().AddSeconds(__snake_options.time)
+    pellets.Initialize()
+    snake.Render();
+    while (true) {
+        snake.Move()
+        timeRemaining = endTime - getdate()
+
+        # If time runs out, you lose.
+        if (timeRemaining <= 0) {
+            msg = "Time has run out and the game is over! " +
+                  "You earned ${pellets.Score} points; There were ${pellets.Pellets.Count} pellets left."
+            console.Announce(msg, 'yellow')
+            cls()
+            break;
+        }
+
+        # If the pellet count is zero, you win the game.
+        if (pellets.Pellets.Count == 0) {
+
+            msg = "Game over! You win with ${pellets.Score} points " +
+                  "and ${timeRemaining.TotalSeconds as [<int>]} seconds left. " +
+                  "Congratulations!"
+            console.Announce(msg, 'green')
+            cls()
+            break;
+        }
+
+        # Figure out if we should iterate slow or fast.
+        if (fastCount == 0) {
+            sleep(__snake_options.delay)
+        }
+        else {
+            fastCount -= 1
+        }
+
+        # Process the user key presses.
+        if (console.GetkeyAvailable()) {
+            match console.ReadKey(true).key
+            # change the snake's direction
+            | 'LeftArrow'   -> snake.Direction = 'w'
+            | 'RightArrow'  -> snake.Direction = 'e'
+            | 'UpArrow'     -> snake.Direction = 's'
+            | 'DownArrow'   -> snake.Direction = 'n'
+            # tell the snake to move quickly for 20 moves.
+            | 'f'           -> fastCount = 20
+            | 'SpaceBar'    -> fastCount = 20
+            # If the user types 'q', end the game.
+            | 'q'           -> { 
+                console.Announce("Thanks for playing! Hope you had a good time!", 'yellow')
+                cls();
+                break
+            }
+        }
+    }
+}
+finally {
+    console.SetCursorVisible(true)
+    console.SetForegroundColor(oldFg)
+}
+
+println("Bye bye!")

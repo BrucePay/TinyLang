@@ -1,0 +1,43 @@
+############################################################
+#
+# A script to parse all of the Tiny files in a directory tree.
+#
+############################################################
+
+println('Parsing all of the tiny files in this directory')
+
+funcs = {}
+
+variables = {}
+
+ls '*.tiny' {rec:true}
+    |> foreach {
+        name = it.fullname
+        println(name)
+        try {
+            time { 
+                tree = parsefile(name)
+                filevars = {}
+                # Use the visitor to extract all of the functions and variables used in a script.
+                tree.visit{ n ->
+                    match n
+                    | [<FunctionCall>]  -> funcs[n.name] += 1
+                    | [<variable>]      -> {
+                            filevars[n.name] += 1
+                            variables[n.name] += 1
+                      }
+                }
+                # Print out all of the variables used in the script.
+                warn("File variables: " + keys(filevars))
+            }
+        }
+        catch { }
+    }
+
+alert("functions called by all scripts")
+funcs |> sortdescending{it.value} |> foreach {info "${it.key} (${it.value})"}
+
+alert("variables referenced in all scripts:")
+variables |> sortdescending{it.value} |> println
+
+

@@ -1,0 +1,37 @@
+###############################################################
+#
+# Display all of the classes and functions defined in tiny.ps1
+#
+###############################################################
+
+funcs     = {}
+classes   = {}
+comments  = 0
+tests     = 0
+other     = 0
+
+#
+# Accumulate functions and classes; count comments
+# and other lines.
+#
+readfile 'tiny.ps1' {
+    match it
+    | r/#T /                        -> tests += 1
+    | r/#.*$/                       -> comments += 1
+    | r/class +([a-z]+)/:class      -> classes[class[1]] = true 
+    | r/^ *function +([a-z]+)/:func -> funcs [func[1]] = true
+    |                               -> other += 1
+}
+
+alert("Total lines in file: {0}",
+    comments + classes.Count + funcs .count + other)
+
+alert("Total comments: $comments")
+alert("Total tests: $tests")
+
+alert("Total classes ${classes.Count}")
+classes |> keys |> sort |> printlist
+
+alert("Total functions ${funcs.Count}")
+funcs |> keys |> sort |> printlist
+

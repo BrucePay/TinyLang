@@ -1,0 +1,100 @@
+############################################################################
+#
+# "heap" sort example in Tiny.
+#
+#############################################################################
+
+import utils
+
+#
+# Heap sort implementation. Takes a random heap
+# and extracts the largest values in order.
+#
+fn SortTree tree {
+    #
+    # Routine to rebalance a tree such that for any node n in the rebalanced tree; n.val > n.left.val && n.val > n.right.Aval.
+    #
+    fn rebalance tree {
+        if (tree == null) {
+            return null
+        }
+    
+        if (tree?.var == 0) {
+            return tree
+        }
+    
+        # Rebalance the children first 
+        if (tree?.left.Val > 0) {
+            tree.left = rebalance(tree.left)
+        }
+    
+        if (tree?.right.val > 0) {
+            tree.right = rebalance(tree.right)
+        }
+    
+        if (tree?.left.val > tree?.right.val) {
+            if (tree?.left.val > tree.val) {
+                x = tree?.left.val
+                y = tree.val
+                tree.val = x
+                tree?.left.val = y
+                tree.left = rebalance(tree.left)
+            }
+        }
+        else {
+            if (tree?.right.val > tree.val) {
+                x = tree?.val
+                y = tree?.right.val
+                tree.val = y
+                tree.right.val = x
+                tree.right = rebalance(tree.right)
+            }
+        }
+    
+        tree
+    }
+
+    # The main line that iterates until the argument tree is full of 0s.
+    result = []
+    tree = tree |> rebalance;
+    while (tt?.val > 0) {
+        # top val in tree is also the largest so extact it.
+        result.add(tt.val)
+        tt.val = 0; 
+        tt = tt |> rebalance;
+    }
+    result
+}
+
+#
+# Function to do an in-order traversal of a tree returning
+# all of the values in the tree.
+#
+fn getTreeValue tree {
+    if (tree == null) {
+        return []
+    }
+
+    gettreevalue(tree?.left)
+    + tree?.val
+    + gettreevalue(tree?.right)
+}
+
+# Generate a ttest tree to depth 5
+tt = utils.GenerateRandomTree(5)
+
+# And print it out
+println 'The test tree (unsorted).'
+tt |> gettreevalue |> println
+
+# Must do this before calling sorttree because it will destroy the tree.
+println "The tree sorted with the built-in sort function"
+orig = time { tt |> gettreeValue |> sortdescending }
+orig |> println
+
+println 'And the heap-sorted test tree:'
+result = time { sorttree( tt ) }
+result |> println
+
+println("Do they match ? {0}", orig == result)
+

@@ -1,0 +1,93 @@
+##################################################################
+#
+# Tiny script to find routes between European countries.
+# (Inspired by a Prolog example.)
+#
+##################################################################
+
+# Bordering countries 'database'
+borderingCountries = [
+    [ 'Belgium',     'France'],
+    [ 'France',      'Germany'],
+    [ 'France',      'Italy'],
+    [ 'France',      'Spain'],
+    [ 'Germany',     'Austria'],
+    [ 'Germany',     'Denmark'],
+    [ 'Denmark',     'Sweden'],
+    [ 'Germany',     'Switzerland'],
+    [ 'Netherlands', 'Belgium'],
+    [ 'Netherlands', 'Germany'],
+    [ 'Spain',       'Portugal'],
+    [ 'Sweden',      'Norway'],
+    [ 'Sweden',      'Finland'],
+    [ 'Norway',      'Finland'],
+    [ 'Italy',       'Switzerland'],
+    [ 'Italy',       'Austria']
+]
+
+#
+# Find all of the countries bordering the specified country
+#
+fn bordering country ->
+    matchlist borderingCountries
+    | ^country :: borderingCountry :: _ -> borderingCountry
+    | borderingCountry :: ^country :: _ -> borderingCountry
+
+#
+# Returns true if countries A and B border on each other.
+#
+fn borders a b -> (matchlist borderingCountries
+                  | ^a :: ^b :: _ | ^b :: ^a :: _ -> true )
+                  .Count > 0
+
+#
+# Return the smallest item in a list based on the
+# result of executing a lambda.
+#
+fn minlist list f -> list?.reduce{ if (f(it) < f(it2)) {it} else {it2}}
+
+#
+# Find the shortest route between two countries
+#
+def route a b -> route(a, b, [])
+def route a b checked ->
+    if (a |> borders(b)) {
+        # If the countries directly border on each other then just return that pair.
+        [a, b]
+    }
+    else {
+        # Otherwise find all of the candidate routes
+        routes = foreach (c in a |> bordering |> where {checked !:> it}) {
+            result = route(c, b, a :+ checked)
+            if (result) {
+                a :+ result
+            }
+        }
+
+        # then pick the shortest routes
+        minlist (routes, {it.Count}) 
+    }
+
+#
+# Utility function to print out a route
+fn printRoute -> it.Join(' -> ') |> println
+
+###############################################################
+#
+# Now use the function to get a bunch of routes
+#
+route('Austria',  'Spain')       |> printRoute
+
+route('Denmark',  'Portugal')    |> printRoute
+
+route('Portugal', 'Switzerland') |> printRoute
+
+route('Portugal', 'Norway')      |> printRoute
+
+route('Belgium',  'Italy')       |> printRoute
+
+route('France',   'Austria')     |> printRoute
+
+route('France',   'Norway')      |> printRoute
+
+

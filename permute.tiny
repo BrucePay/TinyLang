@@ -1,0 +1,97 @@
+#######################################################
+#
+# Examples of doing recursive permutation in Tiny.
+#
+#######################################################
+
+import utils
+
+println("Function to compute permutations of sets of numbers, order doesn't matter:")
+
+def permute [] -> []
+def permute x::[] -> [x];
+def permute x::y::[] -> [x, y, [x, y]]
+def permute x::xs {
+    p = permute(xs);
+    [x] + p + p |> map { [] + x + it };
+}
+
+[1..4] |> permute |> distinct |> println
+
+#########################################################
+
+println("Function to compute permutations where order matters and all elements must be included:")
+
+def opermute [] -> []
+def opermute x::[] -> [x];
+def opermute x::y::[] -> [[x, y], [y, x]]
+def opermute x::xs {
+    result = []
+    opermute(xs) |> map {
+        item = it;
+        result += [0 ..  getlength(item)] |> map {
+            before = item.GetRange(0, it);
+            after = item.GetRange(it, getlength(item));
+            val = before + x + after
+            val
+        }
+    }
+    result
+}
+
+print("Permute numbers:\n    ");
+[1, 2, 3, 4] |> opermute |> map{ it.join(" ") } |> join ', ' |> println
+
+print("Permute a string:\n    ")
+'wxyz'.ToCHarArray().AsList() |> opermute |> map{ it.join() } |> join ', ' |> println
+
+#
+# Generate all of the anagrams of a string
+#
+fn Anagrams str {
+    result = str.ToCharArray().AsList() |> opermute |> map { it.join() }
+    if (GetLength(result) != utils.Fact(GetLength(str))) {
+        throw "opermute returned the wrong number of items!"
+    }
+    result |> where{ it == it |> reverse} |> distinct
+}
+
+str = 'abcab'
+print("Find the anagrams in the string '$str' (takes a while):\n    ")
+str |> Anagrams |> join ' ' |> println
+
+#########################################################
+#
+# Checks to see if a string might contain anagrams.
+# FOr it to do so, there can be at most one character that
+# occurs an odd number of times.
+#
+fn [<bool>] IsAnagram data {
+    s = {};
+    # Count the number of each element character
+    if (data is [<string>]) {
+        data = data.ToCharArray().AsList()
+    }
+
+    # count the number of occurances of each item using a dictionary
+    data |> foreach{ s[it] += 1 };
+
+    Result = s.values
+    |> where {it % 2 != 0} # filter out items occurring an even number of times
+    |> count
+
+    # Can have anagrams if there was at most 1 character with an odd number of occurrances.
+    result <= 1
+}
+
+result = 'aaabbb' |> IsAnagram
+println("Testing 'aaabbb' for anagrams; Should return false")
+result |> println
+
+println("Testing 'aaabb' for anagrams; Should return true")
+'aaabb' |> IsAnagram |> println
+
+println("Should be true")
+println("Testing 'able was I ere I saw elba' for anagrams;  Should return true")
+'able was I ere I saw elba' |> IsAnagram |> println
+

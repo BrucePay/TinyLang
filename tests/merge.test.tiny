@@ -1,0 +1,83 @@
+########################################################
+#
+# A Tiny script that tests the implemention of the
+# merge sort algorithm.
+#
+#######################################################
+
+import 'math'
+import 'tinytestutils'
+
+suite 'MergeSort' {
+    test 'AllUpTest' {
+    
+        test: {
+            # Number of items to sort from arguments or default
+            itemsToSort = 25
+            
+            #
+            # Function to merge two sorted lists
+            #
+            fn merge l1 l2 {
+                result = []
+                while (l1.count && l2.count) {
+                    if (l1[0] > l2[0]) {
+                        result += l2.Pop()
+                    }
+                    else {
+                        result += l1.Pop()
+                    }
+                }
+            
+                # Pop any remaining items in l1
+                while (l1.count > 0) {
+                    result += l1.Pop()
+                }
+            
+                # Pop any remaining items in l2
+                while (l2.count > 0) {
+                    result += l2.Pop()
+                }
+            
+                result
+            }
+            
+            ############################################
+            #
+            # Function to merge-sort a list
+            #
+            fn mergesort list {
+                # split the list into single-item lists
+                listOfLists = list / 1
+                # repeat the merges until there is only one item left
+                while (listOfLists.Count > 1) {
+                    nl = []
+                    # pull two lists from the list and merge them
+                    # repeat until all lists are merged
+                    while (listOfLists.count > 0) {
+                        l1 = listOfLists.Pop()
+                        l2 = listOfLists.Pop()
+                        if (l2 && l1) {
+                            nl.Add(merge(l1, l2))
+                        }
+                        elseif (l1) {
+                            nl.Add(l1)
+                        }
+                        elseif (l2) {
+                            nl.Add(l2)
+                        }
+                    }
+                    listOfLists = nl
+                }
+                listOfLists[0]
+            }
+            
+            items = itemsToSort |> getRandom
+            sorted = items |> mergesort()
+            sorted == items.sort()
+        }
+        expected: true
+    }
+}
+        
+

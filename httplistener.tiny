@@ -1,0 +1,350 @@
+################################################
+#
+# Simple HttpListener-based web serve in Tiny
+#
+################################################
+
+import 'htmlutils'
+import 'utils'
+import 'IO'
+
+options = Utils.GetOpts('httplistener', args, {
+        port:     4096
+        verbose:  false
+        browser:  false
+        formOnly: false
+    })
+
+# If there's an error processing options, it will return null
+# and the script should exit.
+if (options == null) {
+    return null
+}
+
+stopwatch = utils.NewStopWatch()
+
+prefix = format("http://localhost:{0}/", options.Port)
+
+println("Http Server listening at " + prefix)
+
+# Create the http listener if it doesn't already exist
+# in the global scope.
+if (__global !:> 'listener') {
+    __global.listener = [<system.net.httplistener>].new()
+    __global.listener.Prefixes.Add(prefix)
+}
+__global.listener.Start()
+
+queryDefaults = {
+    Number1: 0
+    Number2: 0
+    ShowTables: 'off'
+}
+
+# Utility function to parse a query string into a hashtable
+fn parseQuery str {
+    # Initialize the hashtable
+    query = {};
+
+    # split the query elements and extract the names and value
+    matchlist (str /~ '&')
+    | r/([^=]*)=([^=]*)'/:qe -> query[qe[1]] = qe[2]
+
+    # return the populated hashtable
+    query + queryDefaults
+}
+
+# If the 'browser' option was specified then open a web browser on ourselves
+if (options.browser) {
+    url = prefix + 'sum?number1=0&number2=0&ShowTables=off'
+    alert('Opening browser on {0}', url)
+    start(url)
+}
+
+if (options.formonly) {
+    alert("Showing form only.")
+}
+else {
+    alert('Showing form and tables.')
+}
+
+try {
+    requestCount = 0
+
+    # The main application loop.
+    while (true) {
+
+        # Synchronously wait for a request 
+        context = __global.listener.GetContext()
+
+        # start timing the response
+        stopwatch.reset()
+        stopwatch.start()
+
+        # Process the request object and print a message
+        requestCount += 1
+        request = context.Request
+        println("Request #{0} URL: {1}", requestCount, request.RawUrl)
+        if ((qs = request.RawUrl /~ '\?')?.Count > 1) {
+            _ = qs + queryDefaults
+            query = qs[1] |> parseQuery
+            println "QueryString:"
+            OutHost(query)
+        }
+        else {
+            println '<No query elements, using defaults>'
+            query = queryDefaults
+        }
+
+        # If the URL contains 'stop' then exit the listener loop
+        request.RawUrl ~ 'stop' then {
+            alert "\nReceived stop command."
+            break
+        }
+
+        # Prepare the response
+        response = context.Response
+
+        if (options.Verbose) {
+            println('Generating the response string.');
+        }
+
+# Style for alternating rows of color in tables; not used currently
+#                        tr:nth-child(even) {background-color: #f2f2f2;}
+
+        # The HTML  string to return as the response
+        responseString = 
+            html {
+                head : {
+                    h1 "The Tiny Webserver"
+
+                    # Set up styles for the document
+                    style '
+                        table {
+                            border: 1px solid black;
+                        }
+                        th {
+                            padding: 10px;
+                            text-align: center;
+                            background-color: #e0e0e0; 
+                        }
+
+                        tr {
+                            Background-color: #f2f2f2;
+                        }
+
+                        td {
+                            padding: 10px;
+                            text-align: left;
+                        }
+
+                        input[type=button], input[type=submit], input[type=reset] {
+                            background-color: #909090; 
+                            border: none;
+                            width:  100%;
+                            color: white;
+                            padding: 16px 32px;
+                            text-decoration: none;
+                            margin: 4px 2px;
+                            cursor: pointer;
+                        }
+                    '
+                }
+
+                body : {
+                    h2 "Hi there from Tiny!"
+                    h3 ("Today is " + getDate().DayOfWeek)
+                    form {
+                         action: '/'
+                         method: 'get'
+                         body: {
+                             table {border: '0px'} {
+                                   tr {
+                                       td 'Enter a number: ' 
+                                       td (input {type: 'number' name: 'number1' value: query?.number1})
+                                   }
+   
+                                   tr {
+                                       td 'Enter a second number:'
+                                       td (input {type: 'number' name: 'number2' value: query?.number2})
+                                   }
+   
+                                   if (query) {
+                                       match request.RawUrl
+                                       | r/sum/ ->
+                                           tr {
+                                               td (format('The sum of {0} plus {1} is:', query.number1, query.number2))
+                                               td (b (asnumber(query.number1) + (asnumber(query.number2))))
+                                           }
+                                       | r/times/ ->
+                                           tr {
+                                               td (format('The product of {0} times {1} is:', query.number1, query.number2))
+                                               td (b (asnumber(query.number1) * (asnumber(query.number2))))
+                                           }
+                                       | r/minus/ ->
+                                           tr {
+                                               td (format('The difference of {0} minus {1} is:', query.number1, query.number2))
+                                               td (b (asnumber(query.number1) - (asnumber(query.number2))))
+                                           }
+                                       | r/divide/ ->
+                                           tr {
+                                               td (format('The result of {0} divided by {1} is:', query.number1, query.number2))
+                                               td (b (asnumber(query.number1) / (asnumber(query.number2))))
+                                           }
+                                       | -> 
+                                           tr {
+                                               td ''
+                                               td ''
+                                           }
+
+                                   }
+                                   else {
+                                        tr {
+                                            td ''
+                                            td ''
+                                        }
+                                   }
+   
+                                   tr {
+                                        td (input {type: "submit" value:"Sum Numbers" size: 20 formAction: '/sum'})
+                                        td (input {type: "submit" value:"Multiply Numbers" size:20 formAction: '/times'})
+                                   }
+                                   tr {
+                                        td (input {type: "submit" value:"Subtract Numbers" size: 20 formAction: '/minus'})
+                                        td (input {type: "submit" value:"Divide Numbers" size: 20 formAction: '/divide'})
+                                   }
+                                   tr {
+                                        td (input {type:"submit" value:'Push Me To Stop The Server' formAction: '/stop'})
+                                        td (
+                                            input {
+                                                 type:  'checkbox'
+                                                 name:  'showTables'
+                                                 label: 'Select to display tables'
+
+                                                 checked: if (query.ShowTables == 'on') {
+                                                                "checked" 
+                                                          }
+                                                          else {
+                                                                ''
+                                                          }
+                                            }
+                                        )
+                                   }
+                              }
+                         }
+                    }
+
+                    stopwatch.stop() 
+                    elapsed = stopwatch.elapsed.TotalMilliSeconds
+                    stopwatch.start()
+
+                    println("Form generation took {0} ms.", elapsed)
+    
+                    if ( query.ShowTables  == 'on' ) {
+ 
+                        # Need the div tag so all output is captured.
+                        div {
+
+                            h2 'The 10 Processes with the Largest Working Set'
+
+                            table {width: "80%"} {
+
+                                # add the headers
+                                tr {
+                                    th 'ProcessName';
+                                    th 'WorkingSet'
+                                    th 'CPU'
+                                    th 'ID'
+                                } 
+
+                                # now generate the table data
+                                utils.getprocesses()
+                                        .sortdescending{it.ws}
+                                        .take(10)
+                                        .map{
+                                            p = it
+                                            tr {
+                                                td (p?.processname);
+                                                td (p?.ws)
+                                                td (p?.cpu)
+                                                td (p?.id)
+                                            }
+                                        }
+                            }
+        
+                            stopwatch.stop() 
+                            println("Process table generation took {0} ms.\n\n---------\n", 
+                                stopwatch.elapsed.TotalMilliSeconds - elapsed)
+                            elapsed = stopwatch.elapsed.TotalMilliSeconds
+                            stopwatch.start()
+        
+                            h2 'The Largest files in this directory'
+                            table {width: "80%"} {
+ 
+                                # headers for the second table
+                                tr {
+                                    th 'Name';
+                                    th 'Length'
+                                    th 'Extension'
+                                    th 'Mode'
+                                }
+
+                                # now generate the table data
+                                shell('ls -file')
+                                        .sortdescending{it.length}
+                                        .take(10)
+                                        .map{
+                                            file = it;
+                                            tr {
+                                                td (file.Name)
+                                                td (file.Length)
+                                                td (file.Extension)
+                                                td (file.Mode)
+                                            }
+                                        }
+                            }
+        
+                            stopwatch.stop() 
+                            println("File size table generation took {0} ms.\n\n---------\n", 
+                                stopwatch.Elapsed.TotalMilliSeconds - elapsed)
+                            stopwatch.start()
+                    }
+                }
+            }
+        }
+
+        if (options.Verbose) {
+            println("-------------------------")
+            println(responseString)
+            println("-------------------------")
+        }
+
+        # Turn the response string into a byte array   
+        if (options.Verbose) {
+            println('Encoding response.')
+        }
+        buffer = Utils.GetBytes(responseString);
+
+        # Write the response
+        response.ContentLength64 = buffer.Length;
+        response.OutputStream.Write(buffer, 0, buffer.Length);
+        response.OutputStream.Close()
+        if (options.Verbose) {
+            println('Wrote response.')
+        }
+        stopwatch.Stop()
+
+        println("Request Complete. Request took {0} ms.\n",
+            stopwatch.elapsed.TotalMilliSeconds)
+    }
+}
+catch {
+    error(it)
+}
+finally {
+    # Close the listener on exit
+    println("Server exiting; processed {0} requests. Goodbye.", requestCount)
+    __global.Listener.Stop()
+}
+
+

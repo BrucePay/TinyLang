@@ -1,0 +1,52 @@
+###################################################
+#
+# Examples of tail-recursive functions. Note - Tiny
+# doesn't actually support tail recursion.
+#
+###################################################
+
+#
+# Reverse a list
+#
+undef tail_reverse 
+def tail_reverse H::T Acc -> tail_reverse(T, H :+ Acc);
+def tail_reverse _    Acc -> Acc;
+def tail_reverse list     -> tail_reverse(list, _)
+
+# try it
+println('Reversing a list')
+tail_reverse([1..20]).ToString() |> println
+
+#
+# Compute tail-recursive Fibonacci sequence
+# 
+undef tail_recursive_fib
+def tail_recursive_fib N                    -> tail_recursive_fib(N, 0, 1, []);
+def tail_recursive_fib 0 _ _ Fibs           -> Fibs
+def tail_recursive_fib N Current Next Fibs  -> tail_recursive_fib(N - 1, Next, Current + Next, Fibs + next);
+
+# try it
+println 'Fibonacci numbers from 1-20';
+tail_recursive_fib(20).ToString() |> println
+
+# Another tail-recursive version of the Fibonacci sequence; uses initializers
+fn fib n a = 0 b = 1 -> if (n < 1) {b} else {fib(n-1, b, a + b)}
+println 'Fibonzcci numbers from 1..20';
+[1..20].foreach{ fib(it) |> println }
+
+# Iterative Fibonacci sequence
+fn fib n {a=0i; b=1i; while (n > 0) { n::a::b::_ = [n-1, b, a+b]}; b}
+println 'Iterative Fibonzcci numbers from 1..200 by 10s';
+[1..200..10].foreach { "$it -> ${fib(it)}" |> println }
+
+#
+# Sum a list of numbers
+#
+undef tail_sum
+def tail_sum []   S -> S
+def tail_sum H::T S -> tail_sum(T, S + H);
+def tail_sum L        -> tail_sum(L, 0)
+
+# Try it
+info 'Printing sum of numbers';
+[1..100] |> tail_sum |> println

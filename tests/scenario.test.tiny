@@ -1,0 +1,70 @@
+#
+# Test more complex scenarios
+#
+
+import 'tinytestutils'
+import 'io'
+import 'math'
+
+#
+# Test the calc script with implements an expression
+# tokenizer/parser/evaluator in Tiny.
+#
+
+calcScript = IO.JoinPath(tinyhome, 'tests', 'calc.tiny')
+
+suite 'CalcTest' {
+
+    # Very simple example - just add two numbers
+    test 'CalcTest1' {
+        test: {
+            run (calcScript) {
+                norepl: true
+                expression: '2+2'
+                returntree: true
+            }
+        }
+        expected: [['+', 2, 2], 4]
+    }
+
+
+    # More complicated test with parens
+    # validate both the tree generated
+    # and the reult of the evaluation
+    test 'CalcTest2' {
+        test: {
+            run (calcScript) {
+                norepl: true
+                expression: '2+2*3 * (2 + 6) '
+                returntree: true
+            }
+        }
+        expected: [['+', 2, ['*', ['*', 2, 3], ['+', 2, 6]]], 50]
+    }
+
+    test 'CalcTest3' {
+        test: {
+            run (calcScript) {
+                norepl: true
+                expression: '2+2*3 * (2 + 6) '
+                returntree: false
+            }
+        }
+        expected: 50
+    }
+
+    test 'CalcTest4' {
+        test: {
+            run (calcScript) {
+                norepl: true
+                expression: '5 * 10 + 17/3 + (15/4) + 2 ** 8 - 300'
+                returntree: false
+            }
+            |> math.floor
+        }
+        expected: 15
+    }
+}
+
+
+

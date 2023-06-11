@@ -1,0 +1,1113 @@
+################################################################
+#
+# A Tiny script to generate HTML Documentation for the Tiny language
+# using a Tiny HTML DSL. This script extracts specific comments
+# for the implementation file 'tiny.ps1': 
+#   #L for list methods
+#   #O for operators
+#   #F for built-in functions
+#   #G for the grammar 
+#
+################################################################
+
+import 'utils'
+import 'IO'
+import 'web'
+import 'htmlutils'
+
+__tinydoc_options = Utils.GetOpts('tinydoc', args, {
+        browser:  false  # show the html file at the end.
+        outputFile: IO.JoinPath(TinyHome, 'Tiny Documentation.html')
+    })
+
+# Option error. GetOpts will have alerted the user so just exit.
+if (__tinydoc_options == null) {
+    return null
+}
+
+
+sw = utils.newstopwatch()
+
+println("Generating HTML help for the Tiny language. ")
+
+# Read the full text of 'tiny.ps1'
+fulltext = readtext('tiny.ps1')
+
+# Split the text into lines that are used to generate
+# the function table, operator and grammar sections.
+AllLines = fulltext |> split r/\n/ |> matchall r/^ *#[a-z]/
+
+################################################################
+#
+# Now generate the HTML document using the Tiny HTML DSL
+# 
+text = html {
+
+    head: {
+        h1 'The Tiny Programming Language'
+        style '
+            body {
+                font-family: "Open Sans", Helvetica, Arial, Sans-Serif;
+            }
+            table {
+                border: 1px solid black;
+            }
+            th {
+                padding: 10px;
+                text-align: center;
+                background-color: #e0e0e0; 
+            }
+            td {
+                padding: 10px;
+                text-align: left;
+                vertical-align: top;
+            }
+            tr:nth-child(even) {background-color: #f2f2f2;}
+        '
+    }
+
+    body: {
+        p  {'Generated: ' GetDate() }
+        h2 'Introduction'
+        p {
+            "Tiny is a small function-oriented imperative dynamic language
+            written entirely in PowerShell. It has both named and anonymous
+            functions (lambdas) which are used extensively in list processing.
+            Tiny also supports regular expression matching on strings and
+            generalized pattern matching on lists and properties. Patterns can
+            also be used in function parameters allowing multiple dispatch (multimethods).
+            Tiny is expression-oriented where the value of a list of statements
+            is the value of the last statement in the list. The syntax of Tiny
+            is largely a subset of C# but with a 'match' statement inspired by "
+
+            link {href: 'https://fsharp.org/' value: 'F# (fsharp)'}
+
+            ', lambda syntax inspired by '
+
+            link {href: 'http://groovy-lang.org' value: 'Groovy'}
+
+            ' and '
+
+            link {href: 'https://kotlinlang.org'  value: 'Kotlin'}
+
+            ' and an object literal (dictionary) notation adopted from JavaScript
+            (In fact, a JSON file is a valid Tiny script).
+            Other influences include Poplog, Haskell, Elm and Elixir/Erlang.
+            The type system however, is essentially the unmodified PowerShell
+            "Extended Type System" (ETS).
+            Operator semantics are substantially informed by the host language '
+
+            link {href: 'https://microsoft.com/powershell' value: 'PowerShell.'}
+
+            ' The language and it''s operators are case-insensitive by default but
+            case-sensitive operations can
+            be expressed using properly constructed regular expression literals. (see below.)'
+        }
+       
+        ## Can add styling to the element as follows: 
+        ## p {style: "background-color:lightblue"} {'
+        p {'
+            Tiny is implemented as a single monolithic PowerShell script.
+            To start the REPL, simply run ''./tiny.ps1'' from inside a 
+           ' 
+           link {href: 'https://github.com/powershell/powershell' value: 'PowerShell 6 (Core)'}
+           'session.'
+        }
+
+        h3 'Documentation and Tests'
+        p {
+            "
+            Much of the documentation, including the grammar for the language is embedded in
+            'tiny.ps1' as comments. The script ''tinydoc.tiny' will extract these comments and generate
+            an HTML page containing the documentation in ''Tiny Documentation.html''. To run the
+            script, start Tiny and do:
+            "
+            pre "    run 'tinydoc' {browser:true}"
+            "
+            This command will generate the HTML file and then open it in a browser window.
+            "
+       }
+       p {
+            "
+            Similarly, 'micro tests' (doc tests) are embedded in the implementing script as comments of the form:
+            "
+            pre '    #T &lt;testName&gt; &lt;testText&gt;'
+            "
+            In addition, the 'tests' subdirectory contains larger unit tests written in a Tiny DSL,
+            The script 'tinytest.tiny' will extract and run the micro tests as well as running
+            the unit tests in the 'tests' subdirectory. You can run this test from within Tiny as
+            follows:
+            "
+            pre "    run 'tinytest' {force:true}"
+            "
+            Specifying 'force:true' will cause the test driver to also build the documentation.
+            By default, 'tinytest' will run in quiet mode. To see all of the tests being run,
+            invoke the script with the 'verbose' option as follows:
+            "
+            pre "    run 'tinytest' {verbose:true}"
+        }
+
+        println("Generating the examples section.")
+        sw.start()
+
+        h3 'Examples'
+        p '
+            The following section provides a number of small examples illustrating the basic 
+            syntax and semantics of the Tiny language.
+        '
+        table {width: '100%'} {
+            tr {
+                th 'Description'
+                th 'Example'
+                th 'Notes'
+            };
+
+            tr {
+                td 'Numeric Literals'
+                tdpre "123\n3.14\n22.006e16\n0xdeadbeef\n1_000_000_000.00"
+                td '
+                    Numeric literals without a decimal point are parsed as integers. With a decimal point,
+                    they are parsed as doubles.  Hex values start with ''0x'' and are also integers.
+                    Numberic literals may optionally include the ''_'' character which is simply ignored.
+                '
+            };
+
+            tr {
+                td 'String Literals and Interpolation'
+                tdpre (
+                    '"a double-quoted\nstring with escapes"' +
+                    "\n'a single-quoted string'\n" + 
+                    'x = 1; "x is $x ${2+3}" == "x is 1 5"'
+                )
+                #BUGBUGBUGBUG - fix the infinite expansion bug then put the signs back.
+                td '
+                    Strings can have either single or double quotes.
+                    Escape sequences are processed in double-quoted strings but
+                    not in single-quoted strings. String interpolation is
+                    also done in double-quoted strings such that "$var" is replaced by the string
+                    value of variable "var" And "${expr}" is replaced by the result of the
+                    evaluating the expression between the braces.
+                '
+            };
+
+            tr {
+                td 'Regular Expression Literals'
+                tdpre ("r/abc/c\n" +
+                       "'abc' ~ r/abc/ == true\n" +
+                       "'abc' ~ r/Abc/c == false\n" +
+                       "'Abc' ~ r/Abc/c == true\n" +
+                       "'[123]' ~ r/^.([0-9]+).$/;  matches[1] == '123'")
+                td ('
+                    Regular expression literals can be used with the regex operators or
+                    in list or property pattern matching.
+                    By default, all matches are case insensitive (default) but case sensitive
+                    matches can be done by adding the ''c'' trailing option e.g.
+                    ' +
+                    pre("r/Abc/c") +
+                    '
+                    Regular expression literals compile the regular expressions while
+                    the containing script is compiled so any syntax errors in a reguilar
+                    expression literal will be caught at script compile time. As is the
+                    case in PowerShell, a regular expression match sets a special variable
+                    ''matches'' to the string elements matches by the expression as shown
+                    in the last example in the examples box.
+                    Note: string interpolation is not done in regular expression literals.
+                    '
+                )
+            };
+
+            tr {
+                td 'Variable and Function Names'
+                tdpre "aVariable\na_variable\na123\na_function()\n_\n__a_var__"
+                td '
+                    Variable, function or method names must start with a letter or ''_''
+                    followed by any number of letters, numbers or underbars. Variables must be
+                    assigned before thay can be used otherwise an error will occur. The variables
+                    ''null'' and ''_'' are special in that anything assigned to them is discarded.
+                    ''_'' is commonly used in pattern matching as the ''dont''t care'' value. On the other
+                    hand, using ''null'' in a pattern matches the literal value null i.e. the pattern match
+                    only succeeds if the corresponding value is null.
+               ' 
+            };
+
+            tr {
+                td 'Pinned Variables'
+                tdpre (
+                    "myvar = 'def'; ['abc', 'def'] ~ 'abc'::^myvar;\n\n" +
+                    "[1, 2, 2, 1] ~ [a, b, ^b, ^a] # match a palindrome\n\n" +
+                    "fn startswith list val -> list ~ ^val::_\n\n"
+                )
+                td '
+                    Pinned variables (adapted from Elixir) are a special case of variables.
+                    A pinned variable name starts with the ''^'' character e.g. ''^myVar''. In
+                    normal script contexts, a pinned variable is the same as a regular variable
+                    i.e. ''^abc'' and ''abc'' refer to exactly the same variable
+                    However in list patterns they serve a special purpose. In list patterns, variables
+                    are normally bound as part of the matching process. In other words, the
+                    corresponding list element is assigned to the variable. However with
+                    pinned variables, the variable''s value is used in the matching process
+                    instead of the variable being bound.
+                '
+            }; 
+
+            tr {
+                td 'List Literal and the Range Operator'
+                tdpre "[1, 2, 3, [4, 5], 10 .. 20];\n[1, 2, 1..5..2, 5, 6] == [1, 2, 1, 3, 5, 5, 6];\n[1, [2..5], 6] == [1, [2,3,4,5], 6]"
+                td '
+                    Syntactically, list (array) literals are surrounded by square brackets -
+                    ''['' and '']'' - and the individual elements of the list are separated by commas ('','').
+                    List elements can take any value expression as an element. Nested lists can also
+                    be specified. The range operator ''..'' can be used in-line with an array literal.
+                    In that case, the list produced by the operator is merged into the containing list.
+                    The range operator can also be used in nested lists. List patterns can be used
+                    to destructure list.
+                '
+            };
+
+            tr {
+                td 'Object (Hashtable) Literals'
+                tdpre (
+                    "{a:1 'key with space':2+2 c:""hi""};\n\n" +
+                    "{a : foreach(i in 1..10) { i }};\n\n" +
+                    "o = {v:2 method:{x -> this.v * x}};\no.method(5) == 10\n" +
+                    "{} # empty object, NOT a empty lambda"
+                )
+                td '
+                    Object literals are implemented as hashtables. Keys can be variable names or strings (but not
+                    general expressions). Values can be expressions of single statements. If the value associated with
+                    a key is a lambda then it can be invoked as a method using paretheses e.g. ''obj.method()''.
+                    WHen invoked in this way, the containing object is available to the method body in
+                    the ''this'' variable. Members can be accessed with either array notation ''hashvar["a"]'' or
+                    property notation ''a.a''. If the value associated with the member is a lambda, then it will be
+                    executed like a method: ''o.method(5)''.
+                '
+            };
+
+            tr {
+                td 'Unary Operators'
+                tdpre "true == ! false\n\n! 0 == false\n\na = 13; -a == -13\n\n+[1..10] == 55\n+ ['a', 'b', 'c'] == 'abc'"
+                td '
+                    As well as unary casts, Tiny has three other unary operators: ''!'' (boolean not),
+                     ''-'' (unary minus) and ''+'' (unary plus). Unary plus is interesting: when
+                    applied to a list of values, it will sum those values as shown in the examples column.
+                '
+            };
+
+            tr {
+                td 'Arithmetic Operators'
+                tdpre "2+2\n'hi' + 'There'\n10 * 3\n16 / 6\n9 % 2\n[1..100] / 20"
+                td '
+                    Tiny has the usual set of arithmetic operators: ''+'', ''-'', ''*'', ''.'', ''/'' and ''%''.
+                    Operators work on numbers, strings and arrays with conventional precedence rules.
+                    ''+'' adds numbers and concatenates arrays and strings.
+                    Dividing an array by a number will split the array into number
+                    sized pieces. See the operators section for more details on semantics and 
+                    the complete list of operators.
+                '
+            };
+
+            tr {
+                td 'Assignment Operators'
+                tdpre "a = b = c = 2;\na += 3;\na -= 3\na *= 10\na /= 5"
+                td '
+                    Tiny provides simple and compound assignment operators. Simple assignment can be used
+                    to initialize a number of variables in a single statement.
+                '
+            }
+
+            tr {
+                td 'Operators and Coercions'
+                tdpre "2 + 2 == 4\n2 + '2' == 4\n'2' + 2 == '22'\n[1] + 2 == [1, 2]\n1 + [2] == [1, 2]"
+                td '
+                    Because Tiny operators use the PowerShell operators (mostly), it inherits PowerShell''s
+                    behavior around type conversions. The left-hand rule generally applies: the type of the left
+                    hand operand determines the type of the overall expression. However, with pure numeric operations,
+                    the overall type of the expression is the that of the more precisely typed operand. Consequently
+                    adding a double and an int will result in a double regardless of which side is which.
+                '
+            };
+
+            tr {
+                td 'Type Literals'
+                tdpre "1 is [&lt;int&gt;]\n[&lt;System.Diagnostics.StopWatch&gt;].New()\n'abc' is [&lt;System.Collections.IEnumerable&gt;]"
+                td '
+                    Type literals use PowerShell''s string-to-type conversion which includes
+                    the default type accelerators as well as any namespaces in-scope in the implementing
+                    script.
+                '
+            };
+
+            tr {
+                td 'Type Casts'
+                tdpre "[&lt;int&gt;] '123' is [&lt;int&gt;]\n[&lt;double&gt;] (2 * 3)"
+                td ('
+                    Type casts use type literals as unary operators, converting the argument
+                    value to the target type via PowerShell''s conversion logic. This means that:
+                    ' +
+                    pre('[&lt;int&gt;] "123"') +
+                    '
+                    succeeds and returns an integer. On the otherhand
+                    ' +
+                    pre('[&lt;int&gt;] "abc"') +
+                    '
+                    results in an error. Casts can also be composed as follows:
+                    ' +
+                    pre('[&lt;int&gt;] [&lt;char&gt;] "a" == 97') +
+                    '
+                    In this example, the first character of the string is turned into
+                    a character and then into the integer ''97''.
+                    '
+                )
+            };
+
+            tr {
+                td 'Regular Expression Operators'
+                tdpre "strToMatch ~ regex\n\nstrToReplace -~ pattern\n\nstrToSplit /~ regex\n\nstrToMatchAll *~ regex"
+                td( '
+                    Tiny has the full set of regular expression operators: match (~), replace (-~),
+                    split (/~) and match all (*~) which returns all matches in the target string.
+                    Matching is done case-insensitively in the invariant locale unless a regex
+                    literal with the ''c'' option is used e.g,
+                    ' + 
+                    pre("'abc' ~ r/Abc/c == false")
+                )
+            };
+
+            tr {
+                td 'Spaces and Semicolons'
+                td (pre "
+                    # one expression - assigns result of a fn call
+                    foo = bar {'Hi there'}
+
+                    # two expressions - variable assignment + lambda
+                    foo = bar; {'Hi there'}
+
+                    # one expression - assign result of array index
+                    foo = bar [2]
+
+                    # two expressions - assignment + array literal
+                    foo = bar; [2]
+
+                    # One expression - assignment + cast
+                    foo = [&lt;int&gt;] '123'
+
+                    # Two expressions - assign type literal + string value
+                    foo = [&lt;int&gt;]; '123'
+                " -~ ["\n *", "\n"])
+                td (
+                    '
+                    Tiny syntax is very free form. Semicolons are permitted between statements
+                    but are usually not required.
+                    For example, the following:
+                    ' +
+                    pre '2+2 3*4 myfunc(2,3)' +
+                    '
+                    contains three distinct expressions without the use of semicolons. However semicolons
+                    are needed in some cases such as those shown in the examples column.
+                    '
+                )
+            };
+
+            tr {
+                td 'Function Invocation'
+                tdpre (
+                    "\nfoo('abc', 12)\n\n" +
+                    "foo {it > 2}\n\n" +
+                    "foo {a: 1 b:2}\n\n" +
+                    "println 'Hello'\n" +
+                    "doit ('bob') {a:1 b:2}\n" +
+                    "count 'abc' + 3"
+                )
+                td '
+                    In general, functions are invoked fairly conventionally with parentheses surrounding
+                    the function arguments. However with special invocation, the function takes a single
+                    argument that must be a lambda literal, object literal or string literal.
+                    Parenthetical or string literal invocations may optionally be followed by
+                    an object or lambda literal. If this is the case, the extra argument is available
+                    inside the body of the function in the ''body'' variable.
+                    Special invocation forms are used in creating DSLs. See the Functions section
+                    for a list of built-in functions.
+                '
+            };
+
+            tr {
+                td 'Functions as infix operators'
+                tdpre (
+                    "fn avg x y -> (x+y)/2\n2 `avg` 3 == 2.5"
+                )
+                td '
+                    Like Haskell, Tiny allows you to invoke any function taking two arguments
+                    as an infix (binary) operaor by surrounding the function name with
+                    backticks (`). All functions invoked this way
+                    share the same precedence which is the same as the precedence of
+                    the range operator (''..'').
+                '
+            };
+
+            tr {
+                td 'Pattern Matching with List Patterns'
+                tdpre (
+                        "\na::b::c::_ = [1,2,3];\n\n" +
+                        "['foo','bob','smith'] ~ 'foo'::{it == 'bob'}::var;\n\n" +
+                        "[1, [20, [300]]] ~ a::[b::[c::_]::_]::_ "
+                        )
+                td (
+                    '
+                    Where regular expressions are used to match strings, list patterns are used to match
+                    lists.  List patterns are composed of variables, which capture values, and
+                    literals such as strings, numbers, etc that must be present in the target
+                    list. Pattern elements are separated by the ''::'' operator. If a pattern
+                    element is a lambda, that pattern will be evaluate to see if it matches using
+                    the ''It'' default variable. If the last element in the pattern is a variable,
+                    it will have an array value even if the number of elements in the pattern is
+                    the same as the number of elements in the target.
+                    This is to facillitate certain recursive matching patterns.
+                    If you want to ensure a scalar value in the element, you must add an extra
+                    pattern element ''_'' which will succeed in the match and
+                    be bound to an empty array. For example, in the following,
+                    ' +
+                    pre('[1, 2] ~ a::b::_ ; (b is [&lt;int&gt;]) == true && b == 2') +
+                    '
+                    ''b'' will be bound to the scalar value 2.
+                    '
+                )
+            };
+
+            tr {
+                td 'Pattern Matching with Property Patterns'
+                tdpre (
+                    "\n{:: a:1 b:b c: r/[a-z]/ ::}"
+                )
+                td '
+                    As well as regular expressions and list patterns, Tiny supports a third kind
+                    of pattern - property patterns - which are used to match against the properties
+                    on objects (or dictionaries). Property patterns can contain the same pattern elements 
+                    as list patterns. The significant difference is that Property Patterns also allow you
+                    to specify the name of the property to catch as a variable:
+                    ''&lt;name&gt;[:&lt;valueToMatch&gt;]''.
+                    So a pattern element ''a'' will simply capture the value of the property ''a'' in a
+                    variable called ''a''. A pattern element with a name and a regular expression value
+                    like ''a:/r[0-9]'' will match the value in the property ''a'' only if that value matches
+                    the regular expression. Property patterns work both against dictionary members
+                    and object properties.
+                '
+            };
+
+            tr {
+                td 'The ''if'' Statement'
+                tdpre (
+                    "if (x > 15) {\n    println 'Greater'\n}\nelseif (x< 10) {\n" +
+                    "    println 'Smaller'\n}\nelse {\n    println 'Ok'\n}\n\n"+
+                    "myvar = if (x % 2 == 0) { 'even' } else { 'odd' }\n"
+                )
+                td '
+                    For Tiny control statements (if/while/foreach), both the parentheses and braces are required.
+                    In the ''if'' statement, additional cases are handled with ''elseif'' clauses. All Tiny 
+                    control statements, including ''if'' statements are expressions with values that can be
+                    assigned to variables. (Note that in many cases, it may be preferrable to use the ''match''
+                    statement instead of ''if'' for reasons of simplicitly and clarity of code.)
+                '
+            };
+
+            tr {
+                td 'The ''while'' Statement'
+                tdpre (
+                    "\ni=0\nwhile (i < 0) {\n     println('I is {0}', i)\n    i += 1\n}\ni = 0\n\n" +
+                   "list = while (i<10) { i += 1; i}\nlist == [1 .. 10]"
+                )
+                td '
+                    The ''while'' statement is also expression valued with the result being the result of the
+                    statement in the statement list aggregated over the iterations. The second of the provided
+                    examples shows how to generate a list of values with a while statement.
+                '
+            };
+
+            tr {
+                td 'The ''foreach'' statement'
+                tdpre "foreach (i in [1 .. 10]) {\n    println('i is ' + i)\n}\n\n(foreach (i in 1..5) { i*2 }) == [2,4,6,8,10]"
+                td ('
+                    The ''foreach'' statement iterates over a list of items, executing the statement
+                    body once for each item. As always, the value of the foreach statement (expression)
+                    is the value of the last statement in the body. This value is aggregated for all
+                    iterations and returned as a collection as illustrated in the second example.
+                    If the last statement in the block doesn''t emit a value, then the overall value
+                    of the ''foreach'' statement will be null.
+                ')
+            };
+
+            tr {
+                td 'The ''match'' statement'
+                tdpre "match value\n| 1 -> 'one'\n| r/[a-z]/ -> 'a letter'\n| {isnumber(it) && it % 2 == 0} -> 'even'\n| -> 'default'"
+                td '
+                    The match statement matches a value against a set of pattern/action clauses.
+                    A clause begins with the or bar ''|'' followed by the pattern expression then an
+                    arrow ''-&gt;'' and finally the action. There can be multiple patterns in
+                    a clause which must be separated by the or bar ''|''.
+                    The first pattern that matches triggers the associated action which returns
+                    it''s value. Patterns can be literal values such as strings or integers,
+                    regular expressions in which case a regex match is done, Tiny
+                    patterns (e.g. ''a::b::c'') in which case pattern matching is done or lambdas.
+                    If the pattern is a lambda, the value being tested is available in the body
+                    of the lambda in the ''it'' variable.
+                    Actions can be single expressions (including a single statement) or
+                    a lambda which is executed rather than returned.
+                '
+            };
+
+            tr {
+                td 'The ''matchlist'' statement'
+                tdpre "input =  [['a', 2], ['b', 3], ['a', 3], ['c', 4]]\nehs = matchlist input| 'a'::n::_ -> n\nehs.Sum() == 5"
+                td '
+                    The ''matchlist'' statement behaves exactly like the ''match'' statement
+                    except it iterates over the value to test. This allows you to match
+                    against a list of lists using pattern matching
+                    in a very concise way. The ''matchist'' statement returns a list
+                    containing the result of all actions that have been executed. If
+                    no actions execute, then it will return an empty list.
+                    In the example shown,  ''matchlist'' iterates over
+                    the list of lists, extracting
+                    the second element from each candidate list where the first element is ''a''.
+                    The results are aggregated into the
+                    variable ''ehs'' and then summed to produce 5.
+                '
+           };
+
+            tr {
+                td 'The try/catch/finally Statement'
+                tdpre (
+                    "try {\n    1/0\n}\ncatch {\n println(""exception was " +
+                    '$it"' +
+                    ")\n}\nfinally {\n    println('Done')\n}\n"
+                )
+                td '
+                    Like many languages, Tiny uses exceptions for error handling and so has
+                    the conventional try/catch/finally statement. A current limitation in the language
+                    is that you cannot specify the type of exception to catch. (Internally all Tiny
+                    exceptions are of type [&lt;TinyException&gt;] anyway so it doesn''t really matter).
+                    The actual exception instance is available in the ''catch'' body through
+                    the ''it'' variable.
+                '
+            }
+
+           tr {
+                td 'The ''return'' Statement'
+                tdpre 'fn foo {1; return 12; 2} foo() == 12'
+                td '
+                    Normally the return value from a function is the value of the last statement executed.
+                    The return statement allows you to return a value from anywhere in a function
+                    by exiting a function body early. This also applies to lambdas with the 
+                    special case that return, when used in a lambda that is invoked with the <b>Invoke()</b>
+                    method will exit both the lambda and the calling function. This allows for block-like
+                    return behavior in functions that take lambda arguments.
+                '
+           };
+
+           tr {
+                td 'The ''break'' Statement'
+                tdpre 'while (true) { break }'
+                td '
+                    BUGBUGBUGBUG TBD
+                '
+            }
+
+           tr {
+                td 'The ''continue'' Statement'
+                tdpre 'foreach (i in 1..10) { continue }'
+                td '
+                    BUGBUGBUGBUG TBD
+                '
+           }
+
+           tr {
+                td 'Basic Function Definitions'
+                td (pre "fn foo (x, y) {\n    println('x=' + x + ' y=' + y)\n    x+y\n}")
+                td '
+                    The return value of a function is the value of the last statement executed
+                    but the return statement can optionally used.
+                    Semicolons are permitted between statements but are rarely required.
+                '
+           };
+
+           tr {
+                td '"Relaxed" Function Definition'
+                td (pre "fn foo x y {\n    println('x=' + x + ' y=' +y)\n    x+y\n}")
+                td '
+                    Parentheses around and commas between parameters can be omitted in function
+                    definitions allowing for a ''relaxed'' style that can be more readable.
+                '
+           };
+
+           tr {
+                td 'Expression-bodied Functions.'
+                tdpre (
+                    "fn plus x y -> x+y   # fn to add 2 numbers\n" +
+                    "\n# Returns true if the number is even\n" +
+                    "fn even n ->\n    if (n % 2 == 0) { true }\n    else {false}\n" +
+                    "\n# Returns a new hashtable\n" +
+                    "fn returnsAHash f l -> {\n    FirstName: f\n    LastName: l\n}\n"
+                )
+                td '
+                    In expression-bodied functions, the body of the function is a single expression following
+                    the ''->'' (It can also be a statement. As always, the result of the function is the result
+                    of the last statement returned.) Note that a lambda specified after the ''->'' is treated as
+                    the value to return not as the body of the function, This is different from the behaviour of
+                    ''-> { ... }'' in a match statement where the lambda is treated as the body of the function.
+                '
+           };
+
+           tr {
+                td 'Parameter Patterns'
+                tdpre (
+                    "fn foo [&lt;int&gt;] n -&gt; 'n is an int'\n" +
+                    "fn foo 1               -&gt; 'One'\n" +
+                    "fn isaNum r/[0-9]+/    -&gt; true\n" +
+                    "fn hd x::_             -&gt; x\n" +
+                    "fn tl _::xs            -&gt; xs\n"
+                )
+                td '
+                    As well as variables to bind, functions may also use "parameter patterns" which are
+                    largely similar to patterns in the match statement. A parameter pattern can be as simple as
+                    a type constraint on a parameter or it could be a literal value, a regex, a TinyList
+                    or property pattern literal. If the parameter match succeeds, the function body is evaluated.
+                    If the parameter match fails, then an error is raised. See "function sets" for an alternative
+                    to this error behaviour.
+                '
+           };
+
+           tr {
+                td 'Function Sets and Parameter Patterns (Multiple Dispatch))'
+                tdpre (
+                    "def fib 0 -> 1\ndef fib 1 -> 1\ndef fib n -> fib(n-1)+fib(n-2)"
+                )
+                td (
+                    p '
+                    Tiny functions can be defined in ''sets'' using the ''def'' keyword.
+                    This is a generalization of method overloads in object-oriented programming.
+                    When this keyword is used, the function definitions are aggregated rather than
+                    replaced. This, along with pattern matching in parameter specifications, allows
+                    you to avoid explicit conditional logic in many cases. In the example shown,
+                    there are three definitions - two that match constant values and a third that
+                    handles the normal case of generating the Fibonocci sequence. 
+                    ' + 
+                    p '
+                    Function sets are matched in order,
+                    stopping after the first successful parameter match. Note that subnsequent
+                    ''def''s continue to accumulate until the definition is remove. This can be
+                    done using the ''undef'' statement.
+                    Arity or number of parameters, is also significant to in function selection.
+                    Two functions with the same name but different
+                    arity are considered different functions in a function set.
+                    (Another term used to describe this feature is ''multimethods'' or ''multiple dispatch''.)
+                    '
+                )
+            };
+
+            tr {
+                td 'The ''undef'' statement'
+                tdpre 'undef zork'
+                td '
+                    The ''undef'' keyword allows you to undefine a variable or function definition
+                    at parse time rather than at run time. Since functions are bound at parse time,
+                    this statement is most useful for dealing with functions, particularily
+                    with function sets defined with the ''def'' keyword. Since ''def'' functions are always
+                    added to the existing function set, you need a way to remove the current function set definition
+                    before rebinding them. The ''undef'' statement will do this.
+                '
+            }
+
+            tr {
+                td 'Functions, Memoization and ''_me'''
+                tdpre (
+                    "\ndef fact 0 -> 1\ndef   fact n ->\n\tif (_me.IsMemoized(n))\n\t\t{ _me.GetMemoized(n) }\n" +
+                    "\telse\n\t\t{ _me.Memoize(n, n * fact(n-1)) }\n\nfact |> foreach { it.ClearMemoized() }\n\n" +
+                    "def fib 0 -> 1\ndef fib 1 -> 1\n# Use overload that takes a computation (lambda) instead of a value" +
+                    "\ndef fib n -> _me.Memoize(n, {fib(n-1) + fib(n-2)})"
+                )
+                td '
+                    Memoization is a technique whereby future computations can be sped up by reusing previous 
+                    computations. In Tiny, to facillitate this, each function or lambda has an optional
+                    ''memo table'' associated with it. This memo table (or rather methods for accessing this
+                    storage table) are available on the lambda itself. The lambda object is available inside the lambda body
+                    through the variable ''_me''. The memoization method set consists of four methods+2 overloads:
+                    <pre>    _me.IsMemoized(object)  # Returns true if the object has been memoized</pre>
+                    <pre>    _me.GetMemoized(object), _me.GetMemoized() # return the whole table</pre>
+                    <pre>    _me.Memoize(object, value), _me.Memoize(object, {...}) # Get the memoized value</pre>
+                    <pre>    _me.ClearMemoize() # Clear the memo table for a lambda.</pre>
+                    The memo table is created the first time an object/value pair is memoized. The code
+                    in the example column shows the canonical patterns for using these methods.
+                    The example using the overload of Memoize() that takes a lambda representing the
+                    computation is the simplest pattern but has the additional overhead of a second
+                    lambda dispatch.
+                '
+            }
+
+            tr {
+                td 'Example: Recursive Fibinocci function using the ''match'' statement.'
+                td (pre "\nfn fib n ->\n    match x\n    | 0 -> 1\n    | 1 -> 1\n    | -> fib(n-1) + fib(n-2)\n")
+                td '
+                    The match statement matches its argument against the values in each of the case clauses.
+                    Match elements can be literal strings or numbers, types (in which case the target objects type is
+                    matched), regular expressions or lambdas. The associated actions can be expressions or statements.
+                    The default clause is indicated by including no match expression. The result value is the result
+                    of executing the action for the matching clause.
+                '
+            };
+
+            tr {
+                td 'Example: Recursive function set to compute the length of a list.'
+                td (pre "\nfn len list ->\n    match list\n    | [] -> 0\n    |  _::tail -> 1 + len(tail)\n")
+                td '
+                    While this is an extremely inefficient way to get the length of the list, it illustrates
+                    the use of pattern matching with lists in the ''match'' statement.
+                '
+            };
+
+            tr {
+                td 'Example: Recursive function set to compute the length of a list using parameter patterns.'
+                tdpre (
+                    "def len [] -> 0\n" +
+                    "def len _::tail -> 1 + len(tail)"
+                )
+                td '
+                    As with the previous example, this is another inefficient way to get the
+                    length of the list.  This example illustrates the use of parameter patterns
+                    in deconstructing lists. The first ''def'' handles the empty-list case
+                    and returns 0. The second ''def'' handles the non-empty list case,
+                    using ''_'' to match the head of the list (since we don''t care what
+                    it is, only that it exists) and ''tail'' to capture the rest of the
+                    list. It adds 1 to the result of calling
+                    ''len'' on the list tail giving the length of the overall list.
+                '
+            };
+
+            tr {
+                td 'Variable and Function Scopes'
+                td (pre ("__global.AGlobalVariable = 123\n\n"+
+                         "__parent.AVariableInTheParentScope = 456\n" +
+                         "x = 123; __current.X = x"))
+                td ('
+                    Tiny currently uses dynamic scoping just like PowerShell: variables are inherited
+                    from the caller''s scope, variable writes are always done in the local scope.
+                    Variables must assigned before they can be used. The current, global and parent scopes
+                    are accessible through the variables ''__current'', ''__global'' and ''__parent''.
+                    Functions are bound in the same namespace an regular variables. In fact, a function
+                    is simply a variable containing an ''invokable''
+                    object such as a Tiny lambda, a MethodInfo object or a PowerShell scriptblock so
+                    a function definition such as:
+                    ' +
+                    pre('fn add x y -> x+y') +
+                    '
+                    is essentially the same as:
+                    ' +
+                    pre('add = {x, y -> x+y}') +
+                    '
+                    except that functions bound with the ''fn'' keyword are bound at parse time 
+                    whereas assignment occurs at runtime.
+                    '
+                )
+            };
+
+            tr {
+                td 'Lambda Literals'
+                td (pre ("\n{x, y -> println('x={0} y={1}', x, y); x+y}\n\n" +
+                         "[1..10].reduce {x, y -> x+y}\n\n" +
+                         "[1..10].map {it * 2}\n\n" +
+                         "{x, y -> x * y}(2, 3) == 6\n\n"+
+                         "{it * it2}(3, 4) == 12"))
+                td '
+                    Tiny lambda syntax is inspired by Kotlin including the use of the automatic ''It''
+                    (and ''It2'') variables.
+                    Lambda bodies may contain multiple statements and the return value of the lambda
+                    is the result of the last statement executed. Lambdas are most frequently used with
+                    list operators like where, map, flatmap, reduce etc. (See the list operation table
+                    below.)
+                    Note 1: that Tiny lambdas are not (currently) closures.
+                    Note 2: Tiny lambdas are implemented by the PowerShell class TinyLambda.
+                '
+            };
+
+            tr {
+                td 'Example: Lambdas and the ''match'' Statement'
+                tdpre (
+                    "fn myMap list lambda ->\n"+
+                    "    match list\n" +
+                    "    | [] -> []\n" +
+                    "    | h::t -> lambda(h) + mymap(t, lambda)\n\n" +
+                    "myMap([1,2,3], {n -> n * 2}) == [2, 4, 6]"
+                )
+                td '
+                    This example is a recursive implementation of the ''map()'' function which takes
+                    a list and a lambda, applies the lambda to each item and then returns the
+                    resulting list of values generated by the lambda.
+                '
+            }
+
+            tr {
+                td 'Implementing the merge sort algorithm'
+                tdpre (
+                    "def merge [] xs         -&gt; xs\n" +
+                    "def merge xs []         -&gt; xs\n" +
+                    "def merge x::xs y::ys   -&gt;\n" +
+                    "       if (x &gt; y) {y :+ merge(x :+ xs, ys)}\n" +
+                    "       else       {x :+ merge(xs, y :+ ys)}\n\n" +
+                    "def mergesort1 []        -&gt; []\n" +
+                    "def mergesort1 x::[]     -&gt; [x]\n" +
+                    "def mergesort1 x::y::[]  -&gt; x `merge` y\n" +
+                    "def mergesort1 x::y::z   -&gt;\n" +
+                    "       x `merge` y `merge` mergesort1(z)\n\n" +
+                    "fn mergesort list -&gt; mergesort1(list / 1)\n" 
+                )
+                td '
+                    This example shows a recursive version of the classic merge sort algorithm
+                    using function sets and parameter patterns to decompose the list to sort.
+                '
+            };
+        };
+
+        sw.Stop()
+        println("Completed in ${sw.Elapsed.TotalMilliseconds}")
+        sw.Reset()
+        sw.Start()
+
+        ################################################################
+        #
+        # Generate the operator table
+        #
+
+        println("Generating the operator table.")
+
+        h2 "The Tiny Operators"
+        p {
+            '
+            The following table lists all of the binary operators in the Tiny
+            language in precedence order, low to high. There are three unary
+            operators ''-'' (minus), ''!'' (boolean not) and casts like
+            <pre>    [&lt;int&gt;] "123"</pre>. 
+            Casts use PowerShell casting semantics so a string containing only digits
+            can be cast into an integer whereas casting a non-digit string like ''abc''
+            will result in an error.
+            '
+        }
+
+        table {width: '100%'} {
+            tr {
+                th (b 'Operator')
+                th (b 'Prec')
+                th (b 'Description')
+            };
+
+            AllLines
+            |> MatchAll r/^ *#O/
+            # sort by precedence
+            |> sort { __operatortable[(it -~ '^ *' /~ '\s')[1]]?.Prec } 
+            |> map {
+                it ~ r/^ *#O *([^ ]+) +(.*$)/
+                then tr {
+                    td (b (web.htmlencode(matches[1])))
+                    td (__operatorTable[matches[1]]?.Prec)
+                    td (matches[2])
+                }
+            }
+            |> join "\n"
+        }
+        sw.Stop()
+        println "Complete. ${sw.Elapsed.TotalMilliseconds}"
+        sw.reset()
+        sw.Start()
+
+        ################################################################
+        #
+        # Generate the function table
+        #
+
+        println("Generating the function table.")
+
+        h2 'The Tiny Build-in Functions'
+        p'
+            The next table lists all of the built-in functions in Tiny. 
+            Function application can be done with parentheses like:
+            <pre>
+                sqrt(sum([1 .. 100]))
+            </pre>
+            or using the pipe |&gt; operator:
+            <pre>
+                [1 .. 100] |> sum |> sqrt
+            </pre>
+            When using the pipe operator, the first argument to the function
+            is the output from the previous stage in the pipeline.
+        '
+
+        table {width: '100%'} {
+            tr {
+                th (b 'Function')
+                th (b 'Description')
+            };
+
+            (fulltext *~ '#H([^\n]*)\n * ([a-z]+)')
+            |> map {
+                asstring(it) /~ " *\n *" ~ (description :: fnName :: _)
+                then {
+                    description: (description -~ r/^ *#H */)
+                    fnName:      fnName
+                }
+            }
+            |> sort {it.fnName}
+            |> map {
+                # BUGBUGBUG making it and it2 aliases for args[0] and args[1] forces the use of intermediate variables.
+                name = it.fnName
+                desc = it.Description
+                tr {
+                    name |> formatFunctionName |> b |> pre |> td
+                    desc |> td
+                }
+            }
+            |> join "\n"
+        }
+
+        sw.Stop()
+        println("Complete in ${sw.Elapsed.TotalMilliseconds}.")
+        sw.reset()
+        sw.Start()
+
+        ################################################################
+        #
+        # Generate help for the list operations.
+        #
+
+        println("Generating the list operations (methods) table.")
+
+        h2 'The Tiny List (Array) Operations'
+        p '
+            Tiny provides a large set of list operations in the form of methods. The core type
+            for lists in Tiny is [&lt;TinyList&gt;] which is a wrapper around the .NET List&lt;object&gt; class.
+            (This class exists because it''s essentially impossble to freely pass IEnumerables
+            around in PowerShell without having them shredded. Unfortunatly TinyList leads to a
+            lot of overhead which slows everything down.)
+        '
+
+        p '
+            Many of the list operations are similar to LINQ query operators and take lambdas as arguments
+            (Note: some of them are actually implemented with LINQ but, in Tiny, they are all eager.) In
+            Tiny, like in PowerShell, if the method takes a single lambda, the parentheses may be omitted as in
+            <pre>
+                [1 .. 10].map({n -> n * n})
+            </pre>
+            can be written as
+            <pre>
+                [1 .. 10].map{n -> n * n}
+            </pre>
+            Many of the list methods use the implicit ''it'' and ''it2'' variables to pass values to the lambdas
+            as in:
+            <pre>
+                [1 .. 10].map{ it * it }     # Square all of the list items
+                [1 .. 10].reduce{ it + it2 } # sum the list items
+            </pre>
+            The following table describes all of the list operators.
+        '
+
+        table {width: '100%'} {
+            tr {
+                th ( b 'Method')
+                th ( b 'Description')
+            };
+
+            (fulltext *~ r/#L([^\n]*)\n[# ]+([^\n{]*)/)
+            |> sort {
+                # Sort by method name extracted from the text
+                (it /~ "\n")[1] -~ r/^[# ]*(\[[a-z]+\])* */
+            }
+            |> map {
+                [ asstring(it.Groups[1]), asstring(it.Groups[2]).Trim() ] ~ (description :: method :: _)
+                then tr {
+                    td (pre( b (method -~ '\$' -~ [r/,/, ",\n\t"])))  # Remove all the dollar signs from the method signature
+                    td (description -~ '^ *#L *')
+                }
+            }
+            |> join "\n"
+        };
+
+        sw.Stop()
+        println("Complete in ${sw.Elapsed.TotalMilliseconds}.")
+        sw.Reset()
+        sw.Start()
+
+        ################################################################
+        #
+        # Generate the grammar
+        #
+
+        println("Generating the Tiny grammar section.")
+
+        h2 'The Tiny Grammar'
+        p '
+            This section shows the tiny grammar as extracted from the source code.
+            Tiny is processed using a recursive descent parser and a regular expression-based
+            tokenizer.
+        '
+        pre (
+            web.htmlencode(AllLines |> matchall r/^ *#G/ |> map { it -~ r/^ *#G/ } |> join "\n")
+        )
+        h3 'Operator Precedence Table';
+        pre (
+            web.htmlencode(__operatorTable.getenumerator().aslist().tohash{ it.value.prec }
+                           |> map{format('{0,3}: {1}', it.key, it.value*.name |> join '  ')}
+                           |> join "\n")
+        )
+        println("Complete. ${sw.Elapsed.TotalMilliseconds}.")
+
+        # Now validate the grammar
+        run 'checkgrammar'
+        sw.Stop()
+    }
+}
+
+################################################################
+#
+# Utility functions
+# 
+
+#
+# A function to format a built-in function along with its parameters
+# so it will fit properly in the table column
+#
+fn formatFunctionName name {
+    str = format("{0}({1})",
+        name,
+        __functionTable[name]
+        ?.ast
+        .paramblock
+        .parameters
+        .asList()
+        .join(", ")
+    ) -~ r/\$/
+
+    str = if (str.length > 30) {
+        str -~ [', ', ",\n    "]
+    }
+    else {
+        str
+    }
+
+    web.HtmlEncode(str)
+}
+
+fn tdpre (str) -> '<td><pre>' + str + '</pre></td>'
+
+
+################################################################
+
+sw.Stop()
+
+#
+# Write the generated documentation into the TinyHome directory.
+#
+println("Writing generated HTML to '${__tinydoc_options.OutputFile}'")
+WriteText(text, __tinydoc_options.OutputFile)
+
+# if requested, show the document in the browser.
+if (__tinydoc_options.Browser) {
+    println("Launching browser...")
+    start(__tinydoc_options.OutputFile)
+}
+
+

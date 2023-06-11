@@ -1,0 +1,384 @@
+##############################################################
+#
+# Some utility functions
+#
+##############################################################
+
+Utils = {
+
+    ##############################################################
+    #
+    # Load an assembly using its partial name
+    #
+    LoadAssembly: { name ->
+            [<System.Reflection.Assembly>]
+                .LoadWithPartialName(name) == null
+                    then
+                         Warn("Failed to load assembly '{0}'", name)
+            }
+
+    ##############################################################
+    #
+    # Multimethods for finding the maximum of a set of values
+    #
+    # Get the max element in a list
+    #
+    Max: { [<TinyList>] list ->
+        if (list.count < 0) { return [] }
+        list.reduce{this.max(it, it2)}
+    }
+
+    #
+    # Get the max element in a list using a lambda to compute the value to compare
+    #
+    Max: { [<TinyList>] list, [<TinyLambda>] f ->
+        if (list.count < 0) { return [] }
+        list |> map(f) |> reduce{ this.max(it, it2) }
+    }
+
+    #
+    # Get the polymorphic max of two objects
+    #
+    Max: { x, y -> if (x > y) { x } else { y } }
+
+    ##############################################################
+    #
+    # Recursive partition sort of a list. Again too slow
+    # to use. Use the built-in Sort() methods and functions.
+    #
+    QSort: { list ->
+        match list
+        | [] -> []
+        | p :: list -> this.qsort(list.where{it < p}) + p + this.qsort(list.where{it >= p})
+    }
+
+    ##############################################################
+    #
+    # Utility to create a stop watch instance
+    #
+    NewStopWatch: { [<System.Diagnostics.StopWatch>].New() }
+
+    ##############################################################
+    #
+    # Utility to list all the running processes
+    #
+    GetProcesses: {
+        name ->
+
+        if (name) {
+            [<system.Diagnostics.Process>].GetProcessesByName(name).AsList()
+        }
+        else {
+            [<System.Diagnostics.Process>].GetProcesses().AsList()
+        }
+    }
+
+    ##############################################################
+    #
+    # BUGBUG - not sure this adds value anymore
+    # Function to evaluate a lambda and get all of the results instead of the last one.
+    #
+    GetAllResults : {
+        stmtList  ->
+
+        if (stmtList == null) {
+            throw 'Utils.GetAllResults: stmtList argument was null'
+        }
+
+        if (not( stmtList is [<TinyLambda>] )) {
+            throw ("Utils.GetAllResults: stmtList was not a TinyLambda object: '" +stmtList + "'")
+        }
+
+        stmtList.DotReturnAll()
+    }
+
+    ##############################################################
+    #
+    # Script option processor. Scripts must be called llike
+    #    call 'script' {option1: 12 option2: 'hi'}
+    # Positional parameters are not supported. If there is an
+    # error processing the options, error messages are displayed
+    # and null is returned.
+    #
+    GetOpts: {
+        scriptName, argsValue, optionDict ->
+
+        options = head(argsValue) ?? null
+        if (options && not(options is [<IDictionary>])) {
+            error("{0}: Options to the this script should be a dictionary with members:", scriptName);
+            error("    " + keys(optionDict))
+            return null
+        }
+
+        errors = 0
+        foreach (option in keys(options)) {
+            if (optionDict !:> option) {
+                error("{0}: '{1}' is not a valid option for this script.", scriptName, option)
+                errors += 1
+            }
+        }
+
+        if (errors) {
+            error("Valid options are {0}", keys(optionDict))
+            return null
+        }
+
+        # For options not specified, merge in the defaults
+        # otherwise just use the defaults.
+        if (options) {
+            options += optionDict
+        }
+        else {
+            options = optionDict
+        }
+
+        return options
+    }
+
+    ##############################################################
+    #
+    # Convert a string into a byte array
+    #
+    GetBytes: [<System.Text.Encoding>].UTF8.GetBytes
+
+    ##############################################################
+    #
+    # Expose the Sleep() method on this module
+    #
+    Sleep: [<System.Threading.Thread>].Sleep
+
+    ##############################################################
+    #
+    # search through all loaded types, looking ones who's fullname
+    # matches the pattern string.
+    #
+    SelectType: {
+        pattern ->
+
+        if (pattern == null) {
+            throw "SelectType: pattern was null"
+        }
+        [<System.AppDomain>]
+            .CurrentDomain
+                .GetAssemblies()
+                    *. Gettypes().AsList().Flatten()
+                        *. FullName
+                            |> matchall(pattern)
+    }
+
+    ##############################################################
+    #
+    # Multimethod for splitting a string into fixed size
+    # segments but a spaces instead of the middle of a word.
+    #
+    # Split a string at 40 characters but on the nearest whitespace boundary
+    #
+    Chomp: {
+        str ->
+
+        match str
+        | r/^(.{40}[^ ]*)(.*$)/:pieces -> {first: pieces[1], rest: pieces[2].trim()}
+        | -> {first: str; rest: ''}
+    }
+
+    #
+    # Split a string into 'num' length segments. Splitting is done on whitespace.
+    #
+    Chomp: {
+            str, [<int>] num ->
+
+            regToMatch = [<RegexLiteral>].new(null, 'pieces', "^(.{$num}[^ ]*)(.*$)")
+            if (regToMatch.Match(str)) {
+                {first: pieces[1], rest: pieces[2].trim()}
+            }
+            else {
+                {first: str; rest: ''}
+            }
+    }
+
+    #
+    # Split a string into 40 char segments at the next whitespace char.
+    #
+    ChompAll: {
+            str ->
+
+            allResults = []
+            while (true) {
+                result = this.Chomp(str)
+                allResults += result.first
+                if (! (result?.rest )) {
+                     break
+                }
+                str = result.rest
+            }
+            allResults
+    }
+
+    #
+    # Split a string into specified length segments.
+    #
+    ChompAll: {
+            str, [<int>] num->
+
+            allResults = []
+            while (true) {
+                result = this.Chomp(str, num)
+                allResults += result.first
+                if (! (result?.rest)) {
+                    break
+                }
+                str = result.rest
+            }
+            allResults
+    }
+
+    ##############################################################
+    #
+    # Get the amount of memory being consumed by the process
+    # after first doing a full GC.
+    #
+    GetMemory:     [<gc>].GetTotalMemory
+
+
+    ##############################################################
+    #
+    # Generate a tree filled with random numbers.
+    #
+    GenerateRandomTree: {
+        [<int>] depth, [<int>] numRange = 100 ->
+
+        if (depth > 0) {
+            {
+                val:    GetRandom(1, 1, numRange)[0]
+                left:   this.GenerateRandomTree(depth - 1)
+                right:  this.GenerateRandomTree(depth - 1)
+            }
+        }
+        else {
+            null
+        }
+    }
+
+    ##############################################################
+    #
+    # Basic factorial function
+    #
+    Fact: { n -> [1..n].Product() }
+
+    ##############################################################
+    #
+    # Variation of factorial using BigInts
+    #
+    Facti: {n -> [1i..n].Products() }
+
+    ################################################################
+    #
+    # Utility function set to render an object graph
+    # into a printable string, preserving the object structure.
+    # It currently only understands dictionaries, lists and scalars.
+    # so it's not useful for, for example, dumping a parsed expression
+    # tree.
+    #
+    printTree:  {
+        [<IDictionary>] subtree, depth, postFix ->
+
+        # handle the case where it's a dictionary
+        if (depth == 0) {
+           result = "{\n"
+        }
+        else {
+            result = ""
+        }
+
+        depth += 4
+        subtree |> foreach {
+            if (IsHash(it.Value)) {
+                result += ' ' * depth + it.name + ": {\n"
+                result += this.printTree(it.value, depth, postFix)
+                result += ' ' * depth + "}\n"
+            }
+           elseif (IsList(it.Value)) {
+                result += ' ' * depth + it.name + ": [\n"
+                result += this.printTree(it.value, depth, postFix)
+                result += ' ' * depth + "]\n"
+            }
+            else {
+                result += ' ' * depth + it.name + ': ' + it.value + postFix + "\n"
+            }
+        }
+
+        depth -= 4
+        if (depth == 0) {
+            result += "}\n"
+        }
+
+        result
+    }
+
+    printTree: {[<IList>] list, depth, postFix ->
+
+                    if (depth == 0) {
+                        result = ("[\n")
+                    }
+                    else {
+                        result = ""
+                    }
+
+                    depth += 4
+                    firstItem = true
+                    list |> foreach {
+                        if (it is [<IDictionary>]) {
+                            result += ' ' * depth + "{\n"
+                            result += this.PrintTree(it, depth, '')
+                            result +=' ' * depth + "},\n"
+                        }
+                        elseif (it is [<TinyList>]) {
+                            result += ' ' * depth + "[\n"
+                            result += this.PrintTree(it.list, depth, ',')
+                            result += ' ' * depth + "],\n"
+                        }
+                        elseif (it is [<IList>]) {
+                            result += ' ' * depth + "[\n"
+                            result += this.PrintTree(it, depth, ',')
+                            result += ' ' * depth + "],\n"
+                        }
+                        else {
+                            if (it2 == list.Count-1) {
+                                result += this.PrintTree(it, depth, '')
+                            }
+                            else {
+                                result += this.PrintTree(it, depth, ',')
+                            }
+                        }
+                    }
+
+                    depth -= 4
+                    if (depth == 0) {
+                        result += "]\n"
+                    }
+
+                    result
+                }
+
+    printTree: {
+        [<TinyList>] list, depth, postFix ->
+
+        this.printTree(list.list, depth, postFix)
+    }
+
+    printTree: {
+        value, depth, postFix ->
+
+        ' ' * depth + value + postFix + "\n"
+    }
+
+    printTree: {
+        treeToPrint ->
+
+        # Handle generic objects
+        this.printTree(treeToPrint, 0, null)
+    }
+    
+    ##############################################################
+}
+
