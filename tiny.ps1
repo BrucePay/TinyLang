@@ -1744,7 +1744,6 @@ class TinyOperators {
 
             # We get here from a 'return' statement
             return $script:FunctionReturnValue
-#gohere
         }
     }
 
@@ -3203,7 +3202,6 @@ class FunctionCall : Expression
                         $a1 = if ($argsLength -gt 0) { $arguments[0] } else { [AutomationNull]::Value }
                         $a2 = if ($argsLength -gt 1) { $arguments[1] } else { [AutomationNull]::Value }
                         $result = $func.Invoke($arguments, $a1, $a2, $bodyval)
-#say "Returning from TinyLambda 0, result = $result"
                         return $result
                     }
                     elseif ($func -is [List[TinyLambda]]) {
@@ -3244,7 +3242,6 @@ class FunctionCall : Expression
                                 continue;
                             }
                             else {
-#say "Returning from FunctionSet, result = $result"
                                 return $result
                             }
                         }
@@ -3332,16 +3329,13 @@ class FunctionCall : Expression
                         return $result
                     }
                     else {
-#say "Handling generic method invoke for: '$val' type: $($func.name)"
                         # Handle the 'body' magic var.
                         $bodyVal = $null
                         if ($null -ne $this.body) {
                             $bodyVal = if ($this.body -is [TinyLambda]) {
-#say "body is lambda $($this.body)"
                                 $this.body
                             }
                             else {
-#say "body is value $($this.body)"
                                 $this.Body.Eval()
                             }
 
@@ -3351,9 +3345,7 @@ class FunctionCall : Expression
                             $arguments = $newArguments
                         }
 
-#say "Arguments are '$($arguments -join ', ')'"
                         $result = $func.Invoke($arguments)
-#say "Returning from Generic Invoke 1, result = '$result' $($func.Name)"
                         return $result
                     }
                 }
@@ -3399,13 +3391,10 @@ class FunctionCall : Expression
                 $a1 = if ($argsLength -gt 0) { $arguments[0] } else { [AutomationNull]::Value }
                 $a2 = if ($argsLength -gt 1) { $arguments[1] } else { [AutomationNull]::Value }
                 $result = $val.Invoke($arguments, $a1, $a2, $bodyval)
-#say "Returning from TinyLambda 2, result = $result"
                 return $result
             }
             else {
                 # Handle generic invokables...
-#say 'Handling generic invokable'
-
                 # and the 'body' magic var.
                 $bodyVal = $null
                 if ($null -ne $this.body) {
@@ -3421,10 +3410,8 @@ class FunctionCall : Expression
                     $arguments = $newArguments
                 }
 
-#say "Arguments: $arguments"
                 :return_from_function do {
                     $result = $val.Invoke($arguments)
-#say "al invoke returned $result"
                     return $result
                 }
                 until ($false)
@@ -4005,11 +3992,8 @@ class MatchStatement : Statement
         $this.DefaultAction = $DefaultAction
         $this.EvalList = $evalList
         $updatedPairs = [OrderedDictionary]::new()
-#say "match pairs" $pairs
-#foreach ($p in $pairs.GetEnumerator()) { say "key" $p.key "value" $p.value }
         foreach ($p in $pairs.GetEnumerator()) {
             $key = $p.Key
-#BUGBUGBUGBUGBUG
             # Fold patterns
             if ($key -is [PatternLiteral]) {
                 $updatedPairs[$Key.Value] = $p.Value
@@ -5742,7 +5726,6 @@ class TinyList
         }
         else {
             try {
-#BUGBUGBUG THis should return false but it returns true: [[1, 2], [3, 4], [5]] == [[1, 2], [3, 4], 5]
                 return [linq.enumerable]::SequenceEqual(@($this.list), @($listToCompare))
             }
             catch {
@@ -6145,7 +6128,7 @@ class Scopes
         [scopes]::SetVariable('__current',  [scopes]::Scopes[0])
         [scopes]::SetVariable('__parent',   [scopes]::Scopes[0])
         # Add __global to the constants table
-        $script:TinyConstants['__global'] = [scopes]::scopes[-1]
+        $script:TinyConstants['__global'] = [scopes]::scopes[0]
     }
 
     #
@@ -6200,8 +6183,8 @@ class Scopes
     }
 
     #T Variable_Case1 abc = 3.14; ABC == 3.14;
-    #T Variable_Case2 __current.abc = 789; Abc == 789;
-    #T Variable_Case3 aBC = 'hi there'; __current.abc == 'hi there';
+    #T Variable_Case2 __current.xyz = 789; XYZ == 789;
+    #T Variable_Case3 gHI = 'hi there'; __current.ghi == 'hi there';
     #
     # Set the value of a variable in the current scope. Trying to change the
     # value of a constant is an error.
@@ -6725,7 +6708,7 @@ class TinyFunctions {
         }
 
         if ($list -isnot [IEnumerable]) {
-            errorMessage "First: requires an enumerable to work with, not and object of type [$($list.GetType)]"
+            errorMessage "First: requires an enumerable to work with, not an object of type [$($list.GetType)]"
         }
 
         $index = 0
@@ -9037,7 +9020,7 @@ class TinyLambda
         $this.body           = $body
         $this.LocalFunctions = $localFns
         $this.FileName       = [scopes]::scopes[0]['__file']
-        $this.Environment    = [scopes]::scopes[0]
+ #BUGBUGBUG       $this.Environment    = [scopes]::scopes[0]
     }
 
     # Return a new lambda bound to the current environment (scope).
@@ -9103,8 +9086,8 @@ class TinyLambda
     #
     [object] Invoke ([object[]] $arguments, $it, $it2, $body, [ref] $BindSuccess) {
         [scopes]::PushScope()
-        $result = $null
         $current = [scopes]::scopes[0]
+        $result = $null
         $env = $this.Environment
         try {
             # Copy the environment captured with the Bind() method.
@@ -9177,7 +9160,6 @@ class TinyLambda
             }
         }
 
-#say "TinyLambda Invoke: result is $result"
         return $result
                 
     }
@@ -11115,9 +11097,6 @@ class Parser
                                     }
                                     else {
                                         $assignExpr = [Parser]::ExpressionRule()
-#say "assignexpr: $assignexpr; call stack"
-#get-pscallstack | out-host
-#say "end of call stack\n"
                                         if (($assignexpr -is [Assignment] -or $assignexpr -is [BinOp]) -and
                                              $assignexpr.Op -eq '=' -and (
                                                 $assignexpr.Left -is [Variable] -or
@@ -11453,10 +11432,8 @@ class Tiny {
 function TinyTabExpansion {
     param ($prefix)
 
-#say "\ntte prefix: $prefix\n"
     if ($prefix -match '\.\w*$') {
         $pattern = ($prefix -replace '^.*\.') + "*" 
-#say "pattern is $pattern"
         $exprstr = $prefix -replace '\.\w*$'
 
         try {
@@ -11479,7 +11456,6 @@ function TinyTabExpansion {
             return $null
         }
 
-#say "object is $object"
 
         if ($object -is [IDictionary]) {
             [object[]] $result = @(@($object.get_Keys()).
@@ -11497,7 +11473,6 @@ function TinyTabExpansion {
                         $exprstr + '.' + $_
                     }
                 })
-#say "Processing dictionary for $pattern : matched $result"
             return $result
         }
 
@@ -11523,10 +11498,8 @@ function TinyTabExpansion {
                                         $exprstr + "." + $mem.Name
                                     }
                                 })
-#say "Processing type $type result is $result"
         return $result
     }
-#say "returning null"
 
     return $null
 }
@@ -11538,7 +11511,6 @@ $completerScriptBlock = {
     # function completion
     [object[]] $res = @([scopes]::vars().List -like "$prefix*").foreach{
         $val = [scopes]::GetVariable($_)
-#say "val $($val.gettype().name) $val"
         if ($val -is [PSMethod] -or $val -is [TinyLambda] -or $val -is [CommandInfo]) {
             "$_("
         }
@@ -11549,7 +11521,6 @@ $completerScriptBlock = {
 
     if (-not $res) {
         $res = TinyTabExpansion $prefix
-#say "back from tte $res"
     }
 
     # Path completion
@@ -11570,7 +11541,6 @@ $completerScriptBlock = {
         }
     }
 
-#say "expansion returning $res"
 
     return @($res)
 }

@@ -28,7 +28,7 @@ The Tiny Programming Language</h1>
 <body>
 <p>
 Generated: 
-8/7/2022 2:18:15 PM
+6/14/2023 4:30:30 PM
 </p>
 
 <h2>
@@ -3517,8 +3517,7 @@ The Tiny List (Array) Operations</h2>
 The Tiny Grammar</h2>
 
 <p>This section shows the tiny grammar as extracted from the source code.Tiny is processed using a recursive descent parser and a regular expression-basedtokenizer.</p>
-<pre>ohere
- BinaryOperator = &#39;as&#39; | &#39;??&#39; | &#39;.&#39; | &#39;|&gt;&#39; | &#39;?[&#39; | &#39;*&#39; | &#39;&gt;=&#39; | &#39;*.&#39; | &#39;-=&#39;
+<pre> BinaryOperator = &#39;as&#39; | &#39;??&#39; | &#39;.&#39; | &#39;|&gt;&#39; | &#39;?[&#39; | &#39;*&#39; | &#39;&gt;=&#39; | &#39;*.&#39; | &#39;-=&#39;
                   | &#39;is&#39; | &#39;&gt;&#39; | &#39;?.&#39; | &#39;-&#39; | &#39;!:&gt;&#39; | &#39;**&#39; | &#39;:&gt;&#39; | &#39;..&#39; | &#39;::&#39; | &#39;%&#39;
                   | &#39;&lt;=&#39; | &#39;/=&#39; | &#39;then&#39; | &#39;~&#39; | &#39;(&#39; | &#39;&lt;&#39; | &#39;==&#39; | &#39;+=&#39; | &#39;!~&#39; | &#39;&amp;&amp;&#39;
                   | &#39;/~&#39; | &#39;=&#39; | &#39;?=&#39; | &#39;/&#39; | &#39;+&#39; | &#39;*~&#39; | &#39;*=&#39; | &#39;[&#39; | &#39;isnot&#39; | &#39;{&#39;
@@ -3604,7 +3603,6 @@ The Tiny Grammar</h2>
                 MatchStatement     | MatchListStatement | BreakStatement | ContinueStatement |
                 ThrowStatement     | TryCatchStatement  | ReturnStatement ;;
 
-et-pscallstack | out-host
  BreakStatement    = &#39;break&#39; ;;
 
  ContinueStatement = &#39;continue&#39; ;;
@@ -3623,17 +3621,17 @@ et-pscallstack | out-host
 Operator Precedence Table</h3>
 
 <pre> 20: ::
- 18: ?.  *.  ?*.  .
+ 18: ?*.  .  *.  ?.
  15: [  ?[
  13: {  (
  12: :+
  11: |&gt;
- 10: **  -f
-  8: /  %  *
-  6: -  ++  +
+ 10: -f  **
+  8: %  *  /
+  6: -  +  ++
   5: ..
-  4: -~  ~  !=  *~  &lt;=  ??  /~  :&gt;  &lt;:  &gt;=  &lt;  !:&gt;  !~  &gt;  !&lt;:  ==
-  3: isnot  is  as
-  2: +=  /=  ?=  then  =  &amp;&amp;  -=  do  *=  ||</pre>
+  4: !~  /~  !:&gt;  -~  ~  *~  !&lt;:  &gt;=  &gt;  &lt;  &lt;:  ==  :&gt;  !=  ??  &lt;=
+  3: as  isnot  is
+  2: ?=  *=  then  /=  =  &amp;&amp;  do  +=  -=  ||</pre>
 </body>
 </html>
