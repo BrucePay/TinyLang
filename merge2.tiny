@@ -11,11 +11,13 @@
 #
 ########################################################################
 
+# Function set based implementation.
 def merge [] xs -> xs
 def merge xs [] -> xs
 def merge x::xs y::ys -> if (x > y) {y :+ merge(x :+ xs, ys)}
                          else       {x :+ merge(xs, y :+ ys)}
 
+# match statement based implementation
 fn merge_a x::xs y::ys ->
     match _
     | {y == _} -> x :+ xs
@@ -23,6 +25,7 @@ fn merge_a x::xs y::ys ->
     | {x > y}  -> y :+ merge_a(x :+ xs, ys)
     |          -> x :+ merge_a(xs, y :+ ys)
 
+# and another one...
 fn merge_b args ->
     match args
     | xs::[] -> xs

@@ -40,8 +40,12 @@ else {
     }
 }
 
-sw = Utils.NewStopWatch()
+# Timer for the entire test process
+total_time_sw = Utils.NewStopWatch()
+total_time_sw.Start()
 
+# Timer for individual tests
+sw = Utils.NewStopWatch()
 sw.Start()
 
 AllLines = IO.ReadAllLines('tiny.ps1')
@@ -274,7 +278,10 @@ if (__tinytest_options.External) {
     total_tests += getLength(AllTests)
 }
 
-Alert("Total tests run: {0}", total_tests);
+total_time_sw.Stop()
+
+Alert("Total tests run: {0} Total duration {1}",
+    total_tests, total_time_sw.Elapsed.TotalMilliseconds);
 
 if (not(success)) {
     error("There were errors; returning false")

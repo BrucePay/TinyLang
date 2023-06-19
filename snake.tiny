@@ -142,7 +142,7 @@ pellets = {
                 }
 
             console.SetForegroundColor(this.Statuscolor)
-            console.PrintAt(0, console.GetWindowHeight(),
+            console.PrintAt(0, console.GetWindowHeight()-1,
                 "Score: {0,3} Pellets remaining {1,2} Time remaining: {2} seconds      ",
                     this.Score, this.Pellets.Count, secondsRemaining)
         }
