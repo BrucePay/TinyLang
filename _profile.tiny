@@ -14,7 +14,7 @@ fn TEdit filename -> run('editor', filename);
 fn cat fileToCat -> readfile(fileToCat) |> printlist;
 
 # Utility to print out files, multiple per line
-fn wls pattern='*.tiny'  perRow=4 width=25 -> 
+fn wls pattern='*.tiny'  perRow=3 width=25 -> 
                     ((ls(pattern)*.name) / perRow)
                     |> foreach {
                         it.foreach { print( it.PadRight(width) ) };
